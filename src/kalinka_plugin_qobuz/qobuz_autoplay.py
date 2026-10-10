@@ -34,7 +34,9 @@ class QobuzAutoplay:
     def _track_meta_to_autoplay(self, track: Track) -> dict:
         return {
             "artist_id": int(track.performer.id.id) if track.performer else None,
-            "genre_id": int(track.album.genre.id.id) if track.album.genre else None,
+            "genre_id": (
+                int(track.album.genres[0].id.id) if track.album.genres else None
+            ),
             "label_id": int(track.album.label.id.id) if track.album.label else None,
             "track_id": int(track.id.id) if track.id else None,
         }
