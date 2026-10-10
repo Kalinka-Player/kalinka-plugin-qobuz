@@ -165,8 +165,15 @@ class TokenRefresher:
                 data={"jwt": "jwt_api"},
             )
         except httpx.TransportError as exc:
+            if self._holder.generation != generation:
+                return Outcome.STALE
             logger.warning("Qobuz link renewal: network error (%s)", type(exc).__name__)
             return Outcome.FAILED
+        # A fresh handoff supersedes failures as well as successful renewals.
+        # In particular, an old 401 must not expire the replacement credential.
+        if self._holder.generation != generation:
+            logger.info("Qobuz link renewal finished after the link changed; discarded")
+            return Outcome.STALE
         if response.status_code in (401, 403):
             logger.warning("Qobuz link renewal refused: HTTP %d", response.status_code)
             return Outcome.REJECTED
@@ -174,9 +181,6 @@ class TokenRefresher:
         if renewed is None:
             logger.warning("Qobuz link renewal: unusable answer (HTTP %d)", response.status_code)
             return Outcome.FAILED
-        if self._holder.generation != generation:
-            logger.info("Qobuz link renewal finished after the link changed; discarded")
-            return Outcome.STALE
         try:
             self._persist(renewed)
         except OSError as exc:

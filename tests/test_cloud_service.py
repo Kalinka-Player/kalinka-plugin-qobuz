@@ -19,6 +19,7 @@ from conftest import (
     API_JWT,
     GOOD_SECRET,
     QCONNECT_JWT,
+    RENEWED_JWT,
     RENEWED_QCONNECT_JWT,
     FakeQobuzApi,
     assert_no_secrets,
@@ -220,6 +221,54 @@ async def test_an_expired_session_waits_for_the_app(cloud):
     await cloud.until(lambda: "choose *Kalinka (test)*" in harness.service.status_markdown())
 
     assert cloud.tokens == []
+    await harness.close()
+
+
+async def test_a_fresh_handoff_recovers_an_expired_session_and_can_play(cloud):
+    harness = Harness(cloud, exp=int(time.time()) - 3600)
+    harness.service.session_ready(harness.link, handed_over=False)
+    await cloud.until(lambda: "choose *Kalinka (test)*" in harness.service.status_markdown())
+    newer = harness.link.with_session(
+        SessionToken(jwt=RENEWED_QCONNECT_JWT, endpoint=cloud.url), None
+    )
+
+    harness.service.session_ready(newer, handed_over=True)
+    await cloud.until(lambda: cloud.states())
+    await cloud.push(_set_state(
+        playing_state=PLAYING,
+        current_track=qc.QueueTrackWithContext(queue_item_id=1, track_id=5966783),
+    ))
+    await cloud.until(lambda: harness.direct.holds and harness.direct.hold.calls)
+
+    assert cloud.tokens == [RENEWED_QCONNECT_JWT]
+    assert harness.direct.hold.calls[0][0] == "play"
+    await harness.close()
+
+
+async def test_an_expired_session_reconnects_with_the_renewed_api_credential(cloud):
+    now = int(time.time())
+    harness = Harness(
+        cloud, exp=now + 3600,
+        refresh={"jwt_qws": {"jwt": RENEWED_QCONNECT_JWT, "exp": now + 10800}},
+    )
+    harness.service._clock = lambda: now
+    harness.service.session_ready(harness.link, handed_over=True)
+    await cloud.until(lambda: cloud.states())
+    await cloud.push(_set_state(
+        playing_state=PLAYING,
+        current_track=qc.QueueTrackWithContext(queue_item_id=1, track_id=5966783),
+    ))
+    await cloud.until(lambda: harness.direct.holds and harness.direct.hold.calls)
+
+    now += 7200
+    harness.service._bearer = lambda: bearer(RENEWED_JWT, now + 3600)
+    await cloud.drop()
+    await cloud.until(lambda: RENEWED_QCONNECT_JWT in cloud.tokens)
+
+    assert harness.refresh_requests[0].headers["Authorization"] == f"Bearer {RENEWED_JWT}"
+    assert "choose" not in harness.service.status_markdown()
+    assert harness.direct.hold.active
+    assert len(harness.direct.holds) == 1
     await harness.close()
 
 
