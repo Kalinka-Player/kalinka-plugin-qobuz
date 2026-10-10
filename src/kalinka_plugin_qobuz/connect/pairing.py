@@ -159,6 +159,8 @@ class PairingService:
         self._receiver: Optional[HandoffReceiver] = None
         self._advertising = False
         self._refresher: Optional[TokenRefresher] = None
+        self._connect_holder = TokenHolder()
+        self._connect_refresher: Optional[TokenRefresher] = None
         self._refresh_http: Optional[httpx.AsyncClient] = None
         self._stopped = False
 
@@ -182,6 +184,7 @@ class PairingService:
         unlinked = self._link.unlinked()
         self._store.save(unlinked)
         self._link = unlinked
+        self._connect_holder.clear(auth.STARTING)
         if self._sessions is not None:
             self._sessions.session_ended()
         logger.warning("Qobuz account unpaired; this player will wait for a new pairing")
@@ -201,6 +204,8 @@ class PairingService:
         await asyncio.gather(*tasks, return_exceptions=True)
         if self._refresher is not None:
             await self._refresher.stop()
+        if self._connect_refresher is not None:
+            await self._connect_refresher.stop()
         await self._close_window()
         if self._refresh_http is not None:
             await self._refresh_http.aclose()
@@ -583,6 +588,7 @@ class PairingService:
                 "Could not store the Qobuz Connect session (%s); it is in use until restart",
                 exc.strerror or type(exc).__name__,
             )
+        self._start_refresher()
         self._sessions.session_ready(updated, handed_over=True)
 
     def _reject(self, attempt: int, reason: str) -> None:
@@ -634,8 +640,12 @@ class PairingService:
     def _start_refresher(self) -> None:
         """Start renewal for a Bearer credential in force; restart it if it stopped."""
         credential = self._holder.credential
-        if credential is None or credential.kind is not CredentialKind.BEARER:
+        if credential is None:
             return
+        if credential.kind is not CredentialKind.BEARER:
+            self._start_connect_refresher()
+            return
+        self._connect_holder.clear(auth.STARTING)
         if self._refresher is None:
             if self._refresh_http is None:
                 self._refresh_http = httpx.AsyncClient(timeout=httpx.Timeout(10.0))
@@ -649,6 +659,49 @@ class PairingService:
             )
         self._refresher.start()
 
+    def _start_connect_refresher(self) -> None:
+        """Keep Connect's API token alive even when REST uses a persistent token.
+
+        Exchanging the app's Bearer for a user_auth_token makes REST independent
+        of its expiry, but renewing the Connect session still needs that Bearer.
+        It has its own holder so renewal never replaces the REST credential.
+        """
+        bearer = self._link.api_bearer
+        if self._sessions is None or not renewable(bearer):
+            self._connect_holder.clear(auth.STARTING)
+            return
+        if self._connect_holder.credential != bearer:
+            self._connect_holder.install(bearer)
+        if self._connect_refresher is None:
+            if self._refresh_http is None:
+                self._refresh_http = httpx.AsyncClient(timeout=httpx.Timeout(10.0))
+            self._connect_refresher = self._make_refresher(
+                holder=self._connect_holder,
+                http=self._refresh_http,
+                app_id=self._bundle.app_id,
+                persist=self._persist_connect_bearer,
+                on_expired=self._connect_bearer_expired,
+                clock=self._clock,
+            )
+        self._connect_refresher.start()
+
+    def _persist_connect_bearer(self, credential: Optional[Credential]) -> None:
+        self._link = self._link.with_session(self._link.session, credential)
+        self._store.save(self._link)
+
+    def _connect_bearer_expired(self, reason: str) -> None:
+        # Losing Connect's renewal credential does not invalidate a working
+        # REST account or close the handoff endpoint that can recover it.
+        self._connect_holder.clear(auth.EXPIRED)
+        try:
+            self._persist_connect_bearer(None)
+        except OSError as exc:
+            logger.error("Could not store the expired Qobuz Connect token (%s)", exc.strerror)
+        logger.warning(
+            "Qobuz Connect token expired (%s); choose this player again in the Qobuz app",
+            reason,
+        )
+
     def _persist_renewed(self, credential: Credential) -> None:
         renewed = self._link.with_credential(credential)
         self._store.save(renewed)
@@ -658,6 +711,7 @@ class PairingService:
         if not self._link.linked or self._phase is Phase.EXPIRED:
             return
         self._holder.clear(auth.EXPIRED)
+        self._connect_holder.clear(auth.EXPIRED)
         self._set(Phase.EXPIRED, detail=reason)
         logger.warning("Qobuz link expired: %s. Unpair to pair again.", reason)
         if self._sessions is not None:

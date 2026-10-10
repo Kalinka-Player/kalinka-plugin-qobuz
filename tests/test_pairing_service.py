@@ -3,6 +3,7 @@
 import asyncio
 import os
 import stat
+import time
 
 import httpx
 import pytest
@@ -12,6 +13,7 @@ from kalinka_plugin_sdk.module_health import ModuleHealthState
 from kalinka_plugin_qobuz.account import AccessCheckError, Validated
 from kalinka_plugin_qobuz.auth import AuthenticationError, QobuzAuth, TokenHolder
 from kalinka_plugin_qobuz.connect.pairing import PairingService, Phase
+from kalinka_plugin_qobuz.connect.refresh import TokenRefresher
 from kalinka_plugin_qobuz.connect.session_token import SessionToken
 from kalinka_plugin_qobuz.connect.store import LinkState, LinkStore
 from kalinka_plugin_qobuz.qobuz import QobuzClient
@@ -27,6 +29,7 @@ from conftest import (
     OTHER_JWT,
     OTHER_UAT,
     QCONNECT_JWT,
+    RENEWED_JWT,
     RENEWED_QCONNECT_JWT,
     FakeAdvertiser,
     FakeReceiver,
@@ -82,7 +85,7 @@ class _Harness:
         self.bundle_failures = bundle_failures
         self.sleeps = []
 
-    def service(self) -> PairingService:
+    def service(self, *, make_refresher=FakeRefresher) -> PairingService:
         return PairingService(
             client=self.client,
             holder=self.holder,
@@ -96,7 +99,7 @@ class _Harness:
             make_probe_client=lambda holder: QobuzClient(auth=QobuzAuth(holder), transport=_unreachable()),
             make_receiver=self._receiver,
             advertiser=self.advertiser,
-            make_refresher=FakeRefresher,
+            make_refresher=make_refresher,
             sleep=self._sleep,
         )
 
@@ -666,3 +669,114 @@ async def test_a_renewed_session_is_stored(tmp_path):
 
     assert harness.store.load_or_create().session.jwt == RENEWED_QCONNECT_JWT
     assert harness.store.load_or_create().linked
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("restored", [False, True])
+async def test_connect_renews_its_bearer_while_rest_keeps_its_persistent_token(tmp_path, restored):
+    harness = _Harness(tmp_path, sessions=FakeSessionSink())
+    if restored:
+        state = harness.link(credential=uat())
+        harness.store.save(state.with_session(
+            SessionToken(jwt=QCONNECT_JWT, endpoint="wss://q"),
+            bearer(API_JWT, 4102444800),
+        ))
+        service = harness.service()
+        service.start()
+    else:
+        service = await _waiting(harness)
+        await service.handoff(handoff_body())
+    await settle(lambda: service.phase is Phase.LINKED)
+
+    [refresher] = FakeRefresher.instances
+    assert refresher.started
+    assert refresher.holder is not harness.holder
+    renewed = bearer(RENEWED_JWT, 4102448400)
+    refresher.persist(renewed)
+    refresher.holder.install(renewed)
+
+    assert service.api_bearer() == renewed
+    stored = harness.store.load_or_create()
+    assert stored.api_bearer == renewed
+    assert stored.session.jwt == QCONNECT_JWT
+    assert stored.credential == harness.holder.current() == uat()
+    await service.stop()
+    assert refresher.stopped
+
+
+@pytest.mark.asyncio
+async def test_a_new_handoff_replaces_the_connect_renewal_credential(tmp_path):
+    harness = _Harness(tmp_path, sessions=FakeSessionSink())
+    harness.accounts[RENEWED_JWT] = ACCOUNT
+    service = await _waiting(harness)
+    await service.handoff(handoff_body())
+    await settle(lambda: service.phase is Phase.LINKED)
+    [refresher] = FakeRefresher.instances
+    generation = refresher.holder.generation
+
+    await service.handoff(handoff_body(api_jwt=RENEWED_JWT, api_exp=4102448400))
+    await settle(lambda: len(harness.sessions.ready) == 2)
+
+    assert refresher.holder.current() == bearer(RENEWED_JWT, 4102448400)
+    assert refresher.holder.generation > generation
+    assert harness.holder.current() == uat()
+    assert len(FakeRefresher.instances) == 1
+    await service.stop()
+
+
+@pytest.mark.asyncio
+async def test_connect_renewal_expiry_preserves_the_account_and_accepts_a_new_handoff(tmp_path):
+    harness = _Harness(tmp_path, sessions=FakeSessionSink())
+    harness.accounts[RENEWED_JWT] = ACCOUNT
+    service = await _waiting(harness)
+    await service.handoff(handoff_body())
+    await settle(lambda: service.phase is Phase.LINKED)
+    [refresher] = FakeRefresher.instances
+
+    refresher.on_expired("renewal refused")
+
+    assert service.phase is Phase.LINKED
+    assert service.api_bearer() is None
+    assert harness.store.load_or_create().api_bearer is None
+    assert harness.holder.current() == uat()
+    assert harness.advertiser.running
+    assert harness.sessions.ended == 0
+    await service.handoff(handoff_body(api_jwt=RENEWED_JWT, api_exp=4102448400))
+    await settle(lambda: len(harness.sessions.ready) == 2)
+    assert service.api_bearer() == bearer(RENEWED_JWT, 4102448400)
+    await service.stop()
+
+
+@pytest.mark.asyncio
+async def test_connects_renewed_api_token_outlives_the_original_handoff(tmp_path, caplog):
+    now = int(time.time())
+    harness = _Harness(tmp_path, sessions=FakeSessionSink())
+    state = harness.link(credential=uat())
+    harness.store.save(state.with_session(
+        SessionToken(jwt=QCONNECT_JWT, endpoint="wss://q", exp=now + 60),
+        bearer(API_JWT, now + 60),
+    ))
+    requests = []
+
+    def refresh(request):
+        requests.append(request)
+        return httpx.Response(200, json={"jwt_api": {"jwt": RENEWED_JWT, "exp": now + 3600}})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(refresh)) as http:
+        def make_refresher(**kwargs):
+            return TokenRefresher(**{**kwargs, "http": http, "jitter": lambda: 0})
+
+        service = harness.service(make_refresher=make_refresher)
+        service._clock = lambda: now
+        service.start()
+        try:
+            await settle(lambda: service.phase is Phase.LINKED and requests)
+            assert requests[0].headers["Authorization"] == f"Bearer {API_JWT}"
+            assert requests[0].content == b"jwt=jwt_api"
+            now += 120  # Both credentials handed over by the app have expired.
+            assert service.api_bearer() == bearer(RENEWED_JWT, now - 120 + 3600)
+            assert harness.store.load_or_create().api_bearer == service.api_bearer()
+            assert harness.holder.current() == uat()
+            assert_no_secrets(caplog.text)
+        finally:
+            await service.stop()

@@ -147,6 +147,22 @@ async def test_a_renewal_finishing_after_the_link_changed_is_discarded():
     assert events == []
 
 
+@pytest.mark.parametrize("answer", [401, 403, 503, httpx.ConnectError("down")])
+@pytest.mark.asyncio
+async def test_a_failed_old_renewal_cannot_expire_a_new_handoff(answer):
+    clock = _Time()
+    clock.now = EXP + refresh.GRACE_S + 1
+    holder = _holder(bearer(API_JWT, EXP))
+    api = _RefreshApi(answer)
+    api.during_request = lambda: holder.install(bearer(OTHER_JWT, 0))
+    refresher, events = _refresher(api, holder, clock)
+
+    await refresher._run()
+
+    assert events == []
+    assert holder.credential == bearer(OTHER_JWT, 0)
+
+
 @pytest.mark.asyncio
 async def test_a_renewal_after_unpairing_restores_nothing():
     clock = _Time()
