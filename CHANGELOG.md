@@ -2,6 +2,12 @@
 
 Curated, user-facing notes per release. Add a `## <version>` section before tagging — the release workflow puts the matching section into the GitHub Release body.
 
+## 5.1.2
+
+### Fixed
+- **Qobuz Connect plays a track handed over at its start.** Choosing Kalinka in the Qobuz app as a track began could leave Kalinka and the app buffering, with nothing playing: the app can name a start a fraction of a second before the track's, which the player could not take. Kalinka now plays such a track from its start. Handing over partway through a track was not affected.
+- A track just handed over at its start is no longer sought back to its start while it is still starting.
+
 ## 5.1.1
 
 ### Fixed
