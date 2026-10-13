@@ -767,6 +767,28 @@ async def test_a_position_past_the_end_starts_the_track_over(harness):
     assert harness.direct.hold.calls == [("play", "https://streaming.qobuz.test/111", 0)]
 
 
+async def test_a_position_before_the_start_plays_from_the_start(harness):
+    """The app asked for -319 ms; the server's renderer refused the offset
+    after the play call returned, and Kalinka stayed buffering."""
+    await harness.activate()
+
+    await harness.set_state(state=PLAYING, position=-319, current=(1, 111))
+
+    assert harness.direct.hold.calls == [("play", "https://streaming.qobuz.test/111", 0)]
+    assert harness.last().current_position.value == 0
+
+
+async def test_a_seek_before_the_start_seeks_to_the_start(harness):
+    await harness.cast()
+    hold = harness.direct.hold
+    hold.show(PlayerStateEnum.PLAYING, position=60000)
+    await harness.settle()
+
+    await harness.set_state(position=-500)
+
+    assert hold.calls[1:] == [("seek", 0)]
+
+
 async def test_another_renderer_taking_over_stops_playback_here(harness):
     await harness.cast()
     reports = len(harness.reporter.states)
