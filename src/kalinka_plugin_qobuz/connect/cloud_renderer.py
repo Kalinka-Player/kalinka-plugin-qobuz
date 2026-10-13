@@ -340,7 +340,9 @@ class ConnectRenderer:
         if logger.isEnabledFor(logging.INFO):
             logger.info("Qobuz Connect asks: %s", _describe(message))
         state = message.playing_state if has_state else None
-        position = message.current_position if has_position else None
+        # The app can name a start just before the track's, such as -319 ms;
+        # the output takes offsets from the track's start only.
+        position = max(0, message.current_position) if has_position else None
         if has_track:
             item = item_of(message.current_track)
             if item is not None and item != self._current:
