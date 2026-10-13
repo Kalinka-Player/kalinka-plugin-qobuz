@@ -619,7 +619,10 @@ class ConnectRenderer:
         hold = self._hold
         if hold is None or not hold.active:
             return
-        if abs(position_ms - self._position()) <= SEEK_TOLERANCE_MS and position_ms != 0:
+        # A seek to the start restarts the track, except before the output has
+        # reported since the load: the stream is still starting there.
+        near = abs(position_ms - self._position()) <= SEEK_TOLERANCE_MS
+        if near and (position_ms != 0 or self._state is None):
             return
         await hold.seek(position_ms)
 

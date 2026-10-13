@@ -743,6 +743,28 @@ async def test_the_same_position_repeated_after_a_load_does_not_seek(harness):
     assert [c for c in harness.direct.hold.calls if c[0] == "seek"] == []
 
 
+async def test_the_start_repeated_after_a_load_does_not_seek(harness):
+    await harness.activate()
+    await harness.set_state(state=PLAYING, position=-319, current=(1, 111))
+    harness.clock.now += 10
+
+    await harness.set_state(state=PLAYING, position=-319)
+    await harness.set_state(position=0)
+
+    assert [c for c in harness.direct.hold.calls if c[0] == "seek"] == []
+
+
+async def test_a_seek_to_the_start_restarts_a_track_that_plays(harness):
+    await harness.cast()
+    hold = harness.direct.hold
+    hold.show(PlayerStateEnum.PLAYING, position=1500)
+    await harness.settle()
+
+    await harness.set_state(position=0)
+
+    assert hold.calls[1:] == [("seek", 0)]
+
+
 async def test_playback_resumes_where_the_output_was_lost(harness):
     await harness.cast()
     first = harness.direct.hold
