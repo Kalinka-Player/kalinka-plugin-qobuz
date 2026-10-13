@@ -106,7 +106,7 @@ The *User auth token* setting is gone. A token saved by an older version is igno
 
 - This is a prototype. The Qobuz Connect protocol is not documented by Qobuz and was learnt from other receivers.
 - User auth tokens have lasted months in practice. If Qobuz does not issue one, the plugin keeps the app's one-hour token and renews it every hour, which has not been proven over days.
-- The Qobuz Connect session token is renewed with the app's one-hour token, so once both have run out the player waits for the Qobuz app to hand them over again: choose the player in the app.
+- The Qobuz Connect session token is renewed with the app's one-hour token, which the plugin renews every hour as well, even when Qobuz issued a user auth token. If that renewal fails, Qobuz still works in Kalinka, but Qobuz Connect waits for the Qobuz app to hand the token over again: choose the player in the app.
 
 ## Building
 

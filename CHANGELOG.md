@@ -2,6 +2,13 @@
 
 Curated, user-facing notes per release. Add a `## <version>` section before tagging — the release workflow puts the matching section into the GitHub Release body.
 
+## 5.1.1
+
+### Fixed
+- **Qobuz autoplay adds recommendations again.** It failed while asking Qobuz for recommendations, so it added no tracks. It now sends the album's first genre, or none when the album has no genre.
+- **Qobuz Connect keeps working after the first hour.** Once pairing exchanged the Qobuz app's one-hour token for a regular Qobuz user auth token, the plugin stopped renewing the app's token, which Qobuz Connect still needs to renew its session. After an hour the player waited for the Qobuz app to hand it over again. The plugin now renews that token too, keeps it across restarts, and takes the newer one from each handoff. If its renewal fails, browsing and playing Qobuz from Kalinka carry on, and choosing the player in the Qobuz app brings Qobuz Connect back.
+- A renewal that fails after a newer handoff no longer marks the newer link expired.
+
 ## 5.1.0
 
 ### Added
