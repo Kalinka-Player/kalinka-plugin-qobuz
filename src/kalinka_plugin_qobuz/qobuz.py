@@ -7,7 +7,7 @@ import json
 import logging
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, List, Optional
+from typing import TYPE_CHECKING, Callable, FrozenSet, List, Optional
 
 import httpx
 from pydantic import BaseModel, PositiveInt
@@ -54,6 +54,7 @@ from kalinka_plugin_sdk.filters import (
 from kalinka_plugin_sdk.inputmodule import (
     DirectUrl,
     InputModule,
+    ModuleCapability,
     SearchType,
     SourceUnavailableError,
     TrackInfo,
@@ -590,6 +591,9 @@ class QobuzInputModule(InputModule):
 
     def module_name(self) -> str:
         return "Qobuz"
+
+    def capabilities(self) -> FrozenSet[ModuleCapability]:
+        return frozenset({ModuleCapability.CATALOGS})
 
     @_when_unlinked(_empty_page)
     async def search(
