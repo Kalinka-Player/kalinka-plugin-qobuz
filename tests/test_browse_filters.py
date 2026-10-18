@@ -7,6 +7,7 @@ parameter, so those shelves declare genre alone and only ``any``.
 import pytest
 from kalinka_plugin_sdk.datamodel import EntityId, EntityType
 from kalinka_plugin_sdk.filters import FilterOp, FilterQuery, UnsupportedFilter
+from kalinka_plugin_sdk.inputmodule import ModuleCapability
 
 import kalinka_plugin_qobuz.qobuz as qz
 
@@ -47,6 +48,11 @@ def _module(payload=None):
     module.qobuz_client = client
     module.format_id = 5
     return module, client
+
+
+def test_qobuz_offers_its_catalogs_as_a_home_source():
+    module, _ = _module()
+    assert module.capabilities() == frozenset({ModuleCapability.CATALOGS})
 
 
 def _catalog(slug: str) -> EntityId:
