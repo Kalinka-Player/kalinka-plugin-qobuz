@@ -12,7 +12,7 @@ This is an experimental integration with [Qobuz](https://www.qobuz.com), allowin
 
 ## Installation
 
-The plugin installs on a Kalinka server set up from its `.deb` packages: a Raspberry Pi, any other Debian or Ubuntu machine, or a virtual machine. The package is architecture-independent, so the same file installs on all of them. Version 5.1 of the plugin needs Kalinka server 5.5 or newer.
+The plugin installs on a Kalinka server set up from its `.deb` packages: a Raspberry Pi, any other Debian or Ubuntu machine, or a virtual machine. The package is architecture-independent, so the same file installs on all of them. Version 5.2 of the plugin needs Kalinka server 5.12 or newer.
 
 ### With the install script
 

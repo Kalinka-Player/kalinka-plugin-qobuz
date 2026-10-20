@@ -2,6 +2,14 @@
 
 Curated, user-facing notes per release. Add a `## <version>` section before tagging — the release workflow puts the matching section into the GitHub Release body.
 
+## 5.2.0
+
+### Added
+- **Qobuz is offered as a home source.** The plugin reports that its browse root leads to catalogs, so the Kalinka app can list Qobuz among the music sources on Home and pin its catalogs.
+
+### Changed
+- Needs Kalinka server 5.12 or newer, which brings plugin SDK 3.14. The package will not install on an older server.
+
 ## 5.1.2
 
 ### Fixed
