@@ -50,6 +50,7 @@ def _api_track(track_id: int = 999) -> dict:
         "album": {
             "id": "alb1",
             "title": "Album",
+            "artist": {"id": 7, "name": "Performer"},
             "image": {"small": "https://img.qobuz.test/s.jpg"},
             "label": {"id": 3, "name": "Label"},
             "genre": {"id": 4, "name": "Jazz"},
@@ -71,3 +72,28 @@ async def test_a_track_resolves_its_source_at_play_time():
     assert isinstance(source.source, DirectUrl)
     assert source.source.url.startswith("https://streaming.qobuz.test/999")
     assert client.asked == [(999, module.format_id)]
+
+
+@pytest.mark.parametrize("album_context", [False, True])
+@pytest.mark.parametrize(
+    "numbers,expected",
+    [
+        ({"track_number": 7, "media_number": 2}, (7, 2)),
+        ({"track_number": 7}, (7, None)),
+        ({"media_number": 2}, (None, 2)),
+        ({"track_number": None, "media_number": None}, (None, None)),
+        ({}, (None, None)),
+    ],
+)
+def test_track_positions_reach_browse_and_playback_metadata(
+    album_context, numbers, expected
+):
+    module = QobuzInputModule(QobuzConfig(), _FakeClient())
+    track = {**_api_track(), **numbers}
+    playback = module._track_to_track_info(track).metadata
+    album = track.pop("album") if album_context else {}
+    item = module._tracks_to_browse_categories([track], album_meta=album)[0]
+
+    for metadata in (item.track, playback):
+        payload = metadata.model_dump(mode="json")
+        assert (payload["track_number"], payload["disc_number"]) == expected

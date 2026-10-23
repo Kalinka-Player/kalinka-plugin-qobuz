@@ -550,6 +550,8 @@ def metadata_from_track(track, album_meta={}):
                 )
             ),
             "duration": track["duration"],
+            "track_number": track.get("track_number"),
+            "disc_number": track.get("media_number"),
             "album": Album(
                 id=album_id(str(album_info["id"])),
                 title=append_str(album_info["title"], version),
@@ -1082,6 +1084,8 @@ class QobuzInputModule(InputModule):
                     id=track_id(tid),
                     title=append_str(track["title"], track.get("version", None)),
                     duration=track["duration"],
+                    track_number=track.get("track_number"),
+                    disc_number=track.get("media_number"),
                     performer=(
                         Artist(
                             id=artist_id(str(track["performer"]["id"])),
