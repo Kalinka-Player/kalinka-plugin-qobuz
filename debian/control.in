@@ -3,7 +3,7 @@ Version: @VERSION@
 Section: python
 Priority: optional
 Architecture: all
-Depends: kalinka-plugin-sdk (>= 3.15), kalinka-plugin-sdk (<< 4), python3, ca-certificates
+Depends: kalinka-plugin-sdk (>= 3.16), kalinka-plugin-sdk (<< 4), python3, ca-certificates
 Maintainer: Dmitry Savin <envelsavinds@gmail.com>
 Description: Kalinka Plugin for Qobuz – Qobuz plugin for Kalinka Music Player
  Qobuz plugin for Kalinka Music Player

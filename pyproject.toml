@@ -27,7 +27,8 @@ dependencies = [
     # 3.6: playing outside the play queue (Qobuz Connect), with the next track queued.
     # 3.14: ModuleCapability.CATALOGS, which offers Qobuz as a home source.
     # 3.15: Track carries track_number and disc_number from Qobuz metadata.
-    "kalinka-plugin-sdk>=3.15,<4",
+    # 3.16: CoverImage carries aspect_ratio, the shape of a playlist's banner.
+    "kalinka-plugin-sdk>=3.16,<4",
     "httpx[http2]>=0.24",
     # Qobuz Connect pairing: the local handoff endpoint and its mDNS advert.
     "h11>=0.14",
