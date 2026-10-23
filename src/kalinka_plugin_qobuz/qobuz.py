@@ -159,6 +159,8 @@ def label_id(id: str) -> EntityId:
 
 # Above the taxonomy's size, so one request holds all of it.
 GENRE_PAGE = 500
+# Width over height of an editorial playlist's image_rectangle banner.
+PLAYLIST_BANNER_RATIO = 1 / 0.475
 
 # Qobuz's featured endpoints take genre_ids and union them; they offer no text
 # parameter, so those shelves declare genre alone.
@@ -468,6 +470,10 @@ async def load_app_bundle() -> AppBundle:
         len(secrets),
     )
     return AppBundle(app_id=app_id, secrets=secrets)
+
+
+def _first(images):
+    return images[0] if images else None
 
 
 REJECTED_LINK = "Qobuz did not accept this player's link. If it persists, unpair Qobuz and pair again."
@@ -803,7 +809,7 @@ class QobuzInputModule(InputModule):
                             content_type=PreviewContentType.CATALOG,
                             items_count=20,
                             rows_count=2,
-                            aspect_ratio=1 / 0.475,
+                            aspect_ratio=PLAYLIST_BANNER_RATIO,
                         ),
                         role=CatalogRole.INDEX,
                     ),
@@ -823,7 +829,7 @@ class QobuzInputModule(InputModule):
                             content_type=PreviewContentType.PLAYLIST,
                             rows_count=2,
                             items_count=20,
-                            aspect_ratio=1 / 0.475,
+                            aspect_ratio=PLAYLIST_BANNER_RATIO,
                         ),
                         role=CatalogRole.HIDE_ON_HOME,
                     ),
@@ -1007,7 +1013,7 @@ class QobuzInputModule(InputModule):
                         filters=[GENRE_FILTER],
                         preview_config=Preview(
                             type=PreviewType.TEXT_ONLY,
-                            aspect_ratio=1 / 0.475,
+                            aspect_ratio=PLAYLIST_BANNER_RATIO,
                         ),
                     ),
                 )
@@ -1384,7 +1390,7 @@ class QobuzInputModule(InputModule):
                                 content_type=PreviewContentType.PLAYLIST,
                                 items_count=9,
                                 rows_count=1,
-                                aspect_ratio=1 / 0.475,
+                                aspect_ratio=PLAYLIST_BANNER_RATIO,
                                 card_size=CardSize.SMALL,
                             ),
                         ),
@@ -1395,11 +1401,11 @@ class QobuzInputModule(InputModule):
         ]
 
     def _qobuz_playlist_to_playlist(self, playlist):
-        images = playlist.get("images", [None])
-        images150 = playlist.get("images150", [None])
-        images300 = playlist.get("images300", [None])
-        image_rectangle = playlist.get("image_rectangle", images300)
-        image_rectangle_mini = playlist.get("image_rectangle_mini", images)
+        square = _first(playlist.get("images150")) or _first(playlist.get("images"))
+        large_square = _first(playlist.get("images300")) or square
+        banner = _first(playlist.get("image_rectangle"))
+        large = banner or large_square
+        shape = PLAYLIST_BANNER_RATIO if banner else 1.0 if large else None
 
         return Playlist(
             id=playlist_id(str(playlist["id"])),
@@ -1409,9 +1415,11 @@ class QobuzInputModule(InputModule):
                 id=user_id(str(playlist["owner"]["id"])),
             ),
             image=CoverImage(
-                small=images150[0] if images150 else None,
-                large=image_rectangle[0] if image_rectangle else None,
-                thumbnail=image_rectangle_mini[0] if image_rectangle_mini else None,
+                small=square,
+                large=large,
+                # A row leads with a square, which the banner's mini copy is not.
+                thumbnail=square or large_square,
+                aspect_ratio=shape,
             ),
             description=playlist["description"],
             track_count=playlist["tracks_count"],
