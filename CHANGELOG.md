@@ -2,6 +2,16 @@
 
 Curated, user-facing notes per release. Add a `## <version>` section before tagging — the release workflow puts the matching section into the GitHub Release body.
 
+## 5.3.0
+
+### Added
+- **Tracks carry their track and disc numbers.** Kalinka server 5.13 passes them on to the app with the rest of a track's details.
+
+### Changed
+- **Editorial playlists keep their banner's shape.** A playlist's large picture now says it is Qobuz's wide banner, so Kalinka app 0.21.0 shows it whole instead of cropping it to a square.
+- List rows show a playlist's square cover instead of a small copy of its wide banner.
+- Needs Kalinka server 5.13 or newer, which brings plugin SDK 3.16. The package will not install on an older server.
+
 ## 5.2.0
 
 ### Added
