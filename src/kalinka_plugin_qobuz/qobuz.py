@@ -3,8 +3,10 @@ import copy
 import functools
 import hashlib
 import inspect
+import io
 import json
 import logging
+import re
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, FrozenSet, List, Optional
@@ -52,6 +54,7 @@ from kalinka_plugin_sdk.filters import (
     UnsupportedFilter,
 )
 from kalinka_plugin_sdk.inputmodule import (
+    ContentInfo,
     DirectUrl,
     InputModule,
     ModuleCapability,
@@ -161,6 +164,11 @@ def label_id(id: str) -> EntityId:
 GENRE_PAGE = 500
 # Width over height of an editorial playlist's image_rectangle banner.
 PLAYLIST_BANNER_RATIO = 1 / 0.475
+# Banners are stored without CORS headers, so a browser cannot draw them
+# straight from Qobuz; the server serves them through get_content_info.
+PLAYLIST_BANNER_BASE = "https://static.qobuz.com/images/playlists/"
+BANNER_FILE = re.compile(r"[0-9]+_[0-9a-f]{32}_rectangle\.jpg")
+BANNER_ASSET = "banner-"
 
 # Qobuz's featured endpoints take genre_ids and union them; they offer no text
 # parameter, so those shelves declare genre alone.
@@ -250,6 +258,11 @@ class QobuzClient:
             }
         )
 
+        # The image store speaks HTTP/1.1 only, and needs no credential.
+        # An injected transport answers for it too.
+        self._image_transport = transport
+        self._images: Optional[httpx.AsyncClient] = None
+
         self.base = "https://www.qobuz.com/api.json/0.2/"
         self.sec = None
         self.user_id = None
@@ -282,6 +295,27 @@ class QobuzClient:
 
     async def aclose(self) -> None:
         await self.session.aclose()
+        if self._images is not None:
+            await self._images.aclose()
+
+    async def get_image(self, url: str) -> Optional[bytes]:
+        """The picture at ``url``, or None where Qobuz has none there.
+
+        @throw SourceUnavailableError when Qobuz could not be reached.
+        """
+        if self._images is None:
+            # Inside the server's 3s budget for get_content_info.
+            self._images = httpx.AsyncClient(
+                transport=self._image_transport, timeout=httpx.Timeout(2.5)
+            )
+        try:
+            response = await self._images.get(url)
+        except httpx.HTTPError as exc:
+            raise SourceUnavailableError("Qobuz did not send the picture.") from exc
+        if response.is_server_error:
+            raise SourceUnavailableError("Qobuz did not send the picture.")
+        # The store answers 403, not 404, for a picture it does not hold.
+        return response.content if response.is_success else None
 
     async def test_secret(self, sec, track_id) -> bool:
         """Whether Qobuz accepts ``sec``'s signature. Only a 400 means it does
@@ -474,6 +508,14 @@ async def load_app_bundle() -> AppBundle:
 
 def _first(images):
     return images[0] if images else None
+
+
+def _served_banner(url):
+    """A banner's link on this server; any other picture as Qobuz gave it."""
+    name = url.removeprefix(PLAYLIST_BANNER_BASE) if url else ""
+    if not BANNER_FILE.fullmatch(name):
+        return url
+    return f"/content/qobuz/{BANNER_ASSET}{name}"
 
 
 REJECTED_LINK = "Qobuz did not accept this player's link. If it persists, unpair Qobuz and pair again."
@@ -1403,7 +1445,7 @@ class QobuzInputModule(InputModule):
     def _qobuz_playlist_to_playlist(self, playlist):
         square = _first(playlist.get("images150")) or _first(playlist.get("images"))
         large_square = _first(playlist.get("images300")) or square
-        banner = _first(playlist.get("image_rectangle"))
+        banner = _served_banner(_first(playlist.get("image_rectangle")))
         large = banner or large_square
         shape = PLAYLIST_BANNER_RATIO if banner else 1.0 if large else None
 
@@ -1742,3 +1784,14 @@ class QobuzInputModule(InputModule):
 
     async def get_resource_path(self, id) -> str | None:
         return None
+
+    async def get_content_info(self, asset_id: str) -> Optional[ContentInfo]:
+        name = asset_id.removeprefix(BANNER_ASSET)
+        if name == asset_id or not BANNER_FILE.fullmatch(name):
+            return None
+        data = await self.qobuz_client.get_image(PLAYLIST_BANNER_BASE + name)
+        if data is None:
+            return None
+        return ContentInfo(
+            mime_type="image/jpeg", reader=lambda: io.BytesIO(data), size=len(data)
+        )
