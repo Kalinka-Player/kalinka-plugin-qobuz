@@ -136,7 +136,7 @@ async def test_the_service_carries_the_properties_the_app_reads(lan):
     # depending on its version.
     assert {_text(key): _text(value) for key, value in info.properties.items()} == {
         "path": "/streamcore",
-        "type": "SPEAKER",
+        "type": "STREAMER",
         "sdk_version": "kalinka-qobuz-4.0.0",
         "Name": "Kalinka (living room)",
         "device_uuid": ADVERT.device_uuid,

@@ -29,6 +29,10 @@ _MAX_LABEL_BYTES = 63
 _IP_MULTICAST_ALL = 49
 
 
+# By name, the type cloud_session.DEVICE_TYPE sends as a number.
+DEVICE_TYPE = "STREAMER"
+
+
 class NoAddressesError(OSError):
     """No LAN IPv4 address to advertise."""
 
@@ -43,7 +47,7 @@ class Advert:
     def properties(self) -> dict[str, str]:
         return {
             "path": "/streamcore",
-            "type": "SPEAKER",
+            "type": DEVICE_TYPE,
             "sdk_version": self.sdk_version,
             "Name": self.friendly_name,
             "device_uuid": self.device_uuid,

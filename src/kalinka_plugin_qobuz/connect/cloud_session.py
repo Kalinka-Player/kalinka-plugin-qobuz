@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__.split(".")[-1])
 
 JOIN_REASON_CONTROLLER_REQUEST = 1
 JOIN_REASON_RECONNECTION = 2
-# What Pibuz announces itself as; the cloud lists it among the speakers.
-DEVICE_TYPE = 5
+# DEVICE_TYPE_STREAMER; 5 (COMPUTER) drew a laptop in the Qobuz app.
+DEVICE_TYPE = 2
 VOLUME_REMOTE_CONTROL_ALLOWED = 2
 
 

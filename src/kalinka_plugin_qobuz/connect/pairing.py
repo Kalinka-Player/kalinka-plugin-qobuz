@@ -34,7 +34,7 @@ from ..account import (
 )
 from ..auth import Credential, CredentialKind, QobuzAuth, TokenHolder
 from ..qobuz import AppBundle, QobuzClient, load_app_bundle
-from .discovery import Advert, Advertiser, NoAddressesError, ZeroconfAdvertiser
+from .discovery import DEVICE_TYPE, Advert, Advertiser, NoAddressesError, ZeroconfAdvertiser
 from .handoff import Handoff, HandoffError, describe, parse_handoff
 from .receiver import HandoffReceiver
 from .refresh import TokenRefresher, renewable
@@ -237,7 +237,7 @@ class PairingService:
 
     def display_info(self) -> dict:
         return {
-            "type": "SPEAKER",
+            "type": DEVICE_TYPE,
             "friendly_name": self._device_name,
             "model_display_name": "Kalinka",
             "brand_display_name": "Kalinka",

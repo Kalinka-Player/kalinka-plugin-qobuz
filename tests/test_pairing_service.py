@@ -158,6 +158,7 @@ async def test_an_unlinked_player_opens_pairing(tmp_path):
     assert advert.device_uuid == service.link.device_uuid
     assert service.connect_info() == {"current_session_id": "", "app_id": APP_ID}
     assert service.display_info()["serial_number"] == service.link.device_uuid
+    assert service.display_info()["type"] == "STREAMER"
     with pytest.raises(AuthenticationError):
         harness.holder.current()
     health = service.health()
