@@ -125,7 +125,7 @@ async def test_a_connection_joins_as_a_controller_first(harness):
     assert harness.kinds() == [qc.CTRL_SRVR_JOIN_SESSION, qc.CTRL_SRVR_ASK_FOR_QUEUE_STATE]
     info = harness.sent[0].ctrl_srvr_join_session.device_info
     assert frames.uuid_text(info.device_uuid) == DEVICE_UUID
-    assert (info.friendly_name, info.brand, info.device_type) == ("Kalinka (living room)", "Kalinka", 5)
+    assert (info.friendly_name, info.brand, info.device_type) == ("Kalinka (living room)", "Kalinka", 2)
     assert info.capabilities.max_audio_quality == 3
     assert not harness.sent[0].ctrl_srvr_join_session.HasField("session_uuid")
 

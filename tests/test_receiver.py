@@ -19,7 +19,7 @@ class _Handlers:
         self.fail = fail
 
     def display_info(self):
-        return {"type": "SPEAKER", "friendly_name": "Kalinka (test)"}
+        return {"type": "STREAMER", "friendly_name": "Kalinka (test)"}
 
     def connect_info(self):
         return {"current_session_id": "", "app_id": "123456789"}
@@ -57,7 +57,7 @@ async def test_display_and_connect_info_answer_json(served):
         display = await http.get(base + "/streamcore/get-display-info")
         connect = await http.get(base + "/streamcore/get-connect-info?x=1")
 
-    assert display.json() == {"type": "SPEAKER", "friendly_name": "Kalinka (test)"}
+    assert display.json() == {"type": "STREAMER", "friendly_name": "Kalinka (test)"}
     assert connect.json()["app_id"] == "123456789"
     assert display.headers["content-type"] == "application/json"
     assert display.headers["connection"] == "close"
