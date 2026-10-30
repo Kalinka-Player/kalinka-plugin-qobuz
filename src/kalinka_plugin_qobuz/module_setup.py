@@ -33,7 +33,7 @@ STATUS_FIELD = "connect_status"
 
 
 class KalinkaPluginQobuz(InputModulePlugin):
-    REQUIRES_SDK = ">=3.16,<4"
+    REQUIRES_SDK = ">=3.18,<4"
     PLUGIN_ID = "qobuz"
     CONFIG_MODEL = QobuzConfig
     DYNAMIC_FIELDS: ClassVar[dict[str, DynamicFieldDecl]] = {

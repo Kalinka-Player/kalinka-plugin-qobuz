@@ -7,6 +7,16 @@ This product is an independent, community-developed integration and is not
 affiliated with, endorsed by, or supported by Qobuz or its parent companies.
 "Qobuz" is a trademark of its respective owner.
 
+Qobuz artwork
+-------------
+The circular Q logo paths in src/kalinka_plugin_qobuz/icons/ come from the
+qobuz_logo_spinner symbol in Qobuz's official website sprite:
+https://www.qobuz.com/assets-static/build/images/logos.dbcc769d.svg
+(retrieved 2026-10-30). The three white logo paths are preserved, rendered
+black on transparency, without the spinner's background and outline.
+Qobuz artwork and trademarks remain the property of
+their respective owners and are not covered by this plugin's Apache license.
+
 Qobuz Connect
 -------------
 The Qobuz Connect protocol details used in src/kalinka_plugin_qobuz/connect/

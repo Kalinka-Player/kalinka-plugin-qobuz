@@ -28,7 +28,8 @@ dependencies = [
     # 3.14: ModuleCapability.CATALOGS, which offers Qobuz as a home source.
     # 3.15: Track carries track_number and disc_number from Qobuz metadata.
     # 3.16: CoverImage carries aspect_ratio, the shape of a playlist's banner.
-    "kalinka-plugin-sdk>=3.16,<4",
+    # 3.18: packaged small and standard source artwork.
+    "kalinka-plugin-sdk>=3.18,<4",
     "httpx[http2]>=0.24",
     # Qobuz Connect pairing: the local handoff endpoint and its mDNS advert.
     "h11>=0.14",
@@ -53,6 +54,9 @@ kalinka_plugin_qobuz = "kalinka_plugin_qobuz:KalinkaPluginQobuz"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+kalinka_plugin_qobuz = ["icons/*.svg"]
 
 [tool.setuptools_scm]
 write_to = "src/kalinka_plugin_qobuz/_version.py"

@@ -1,5 +1,7 @@
 from typing import ClassVar
+from pathlib import Path
 from pydantic import Field, ConfigDict
+from kalinka_plugin_sdk import ModuleIconFiles
 from kalinka_plugin_sdk.module_config import ModuleConfig
 from enum import Enum
 
@@ -18,6 +20,11 @@ class QobuzConfig(ModuleConfig):
 
     __module_icon__: ClassVar[str] = "music_note_outlined"
     __module_icon_color__: ClassVar[str] = "#C9A96A"  # gold
+    __module_icon_files__: ClassVar[ModuleIconFiles] = ModuleIconFiles(
+        small=Path(__file__).with_name("icons") / "small.svg",
+        standard=Path(__file__).with_name("icons") / "standard.svg",
+        monochrome=True,
+    )
     __preview_fields__: ClassVar[list[str]] = ["format"]
 
     name: str = Field(
