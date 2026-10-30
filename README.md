@@ -178,6 +178,19 @@ Then check playback from the Qobuz app:
 
 ## Development
 
+### Source artwork
+
+The plugin provides small and standard monochrome SVG icons through SDK
+3.18's `ModuleIconFiles` API. The small variant fits the app's 18–20 dp
+attribution marks; the standard variant is used in other source displays.
+The app caches their bitmap conversions. Artwork provenance is in `NOTICE`.
+
+Testing this unreleased feature requires the `feat/plugin-artwork` branches
+of KalinkaPlayer and KalinkaAI. With this plugin installed in editable mode,
+restart the local server and reload the app after changing an asset. The
+server's module listing should include Qobuz's `icons.small` and
+`icons.standard` URLs; the existing music-note icon remains the fallback.
+
 ### Testing
 
 The tests need the plugin SDK, which is not on PyPI. Install it from the KalinkaPlayer repo in the same command as the plugin, so pip never looks the name up on PyPI:
