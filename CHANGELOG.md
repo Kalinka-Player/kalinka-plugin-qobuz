@@ -2,6 +2,12 @@
 
 Curated, user-facing notes per release. Add a `## <version>` section before tagging — the release workflow puts the matching section into the GitHub Release body.
 
+## 5.3.1
+
+### Fixed
+- **Playlist banners show in the browser player.** Qobuz keeps editorial playlists' wide banners on a store a browser is not allowed to read from, so the browser player showed its placeholder in place of every banner. Banners now come through the Kalinka server the browser already talks to. Catalog cards built from playlists draw them with Kalinka server 5.15 or newer; an older server leaves them out of the card.
+- **Kalinka shows as a streamer in the Qobuz app.** Qobuz Connect announced Kalinka as a computer, so the Qobuz app drew a laptop beside it. It now announces a streamer, from pairing to playing.
+
 ## 5.3.0
 
 ### Added
