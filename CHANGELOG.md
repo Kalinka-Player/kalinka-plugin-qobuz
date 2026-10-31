@@ -2,6 +2,15 @@
 
 Curated, user-facing notes per release. Add a `## <version>` section before tagging — the release workflow puts the matching section into the GitHub Release body.
 
+## 5.4.0
+
+### Added
+- **Albums carry their release year.** Album cards, track cards and what is playing now carry the year of the album's release, so the Kalinka app shows it beside album titles, in album rows, on now playing and, from app 0.24.0, on the album's page.
+- **Qobuz shows by its own logo.** The plugin supplies small and standard Qobuz artwork, which Kalinka app 0.24.0 draws wherever it names the source, such as the attribution mark beside a track.
+
+### Changed
+- Needs Kalinka server 5.16 or newer, which brings plugin SDK 3.18. The package will not install on an older server.
+
 ## 5.3.1
 
 ### Fixed
