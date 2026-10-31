@@ -9,6 +9,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Callable, FrozenSet, List, Optional
 
 import httpx
@@ -579,6 +580,16 @@ def append_str(s1: str, s2: str) -> str:
         return s1.strip() + f" ({s2.strip()})"
 
 
+def album_year(album: dict) -> Optional[int]:
+    """The year Qobuz says the release came out, or None where it says nothing."""
+    date = album.get("release_date_original") or ""
+    if date[:4].isdigit():
+        return int(date[:4])
+    if released_at := album.get("released_at"):
+        return datetime.fromtimestamp(released_at, timezone.utc).year
+    return None
+
+
 def metadata_from_track(track, album_meta={}):
     album_info = track.get("album", album_meta)
     version = album_info.get("version", None)
@@ -603,6 +614,7 @@ def metadata_from_track(track, album_meta={}):
             "album": Album(
                 id=album_id(str(album_info["id"])),
                 title=append_str(album_info["title"], version),
+                year=album_year(album_info),
                 image=album_info["image"],
                 label=Label(
                     id=label_id(str(album_info["label"]["id"])),
@@ -1145,6 +1157,7 @@ class QobuzInputModule(InputModule):
                     album=Album(
                         id=album_id(str(album["id"])),
                         title=append_str(album["title"], album_version),
+                        year=album_year(album),
                         artist=Artist(
                             name=album["artist"]["name"],
                             id=artist_id(str(album["artist"]["id"])),
@@ -1285,6 +1298,7 @@ class QobuzInputModule(InputModule):
                 album=Album(
                     id=album_id(str(album["id"])),
                     title=append_str(album["title"], album.get("version", None)),
+                    year=album_year(album),
                     artist=artist,
                     image=(
                         CoverImage(
