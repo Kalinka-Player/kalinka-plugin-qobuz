@@ -15,7 +15,7 @@ import pytest
 
 from kalinka_plugin_qobuz.account import AccountInfo
 from kalinka_plugin_qobuz.auth import Credential, CredentialKind, QobuzAuth, TokenHolder
-from kalinka_plugin_qobuz.qobuz import AppBundle, QobuzClient
+from kalinka_plugin_qobuz.qobuz import AppBundle, QobuzClient, QobuzInputModule
 
 
 def make_jwt(claims: dict, signature: str = "c2lnbmF0dXJl") -> str:
@@ -179,6 +179,49 @@ def track_body(track_id: int) -> dict:
             "genre": {"id": 4, "name": "Jazz"},
         },
     }
+
+
+class FakeResponse:
+    def __init__(self, payload):
+        self._payload = payload
+        self.is_success = True
+
+    def json(self):
+        return self._payload
+
+    def raise_for_status(self):
+        return None
+
+
+class FakeSession:
+    """Records every request; answers each with the same payload, an empty
+    featured listing unless told otherwise."""
+
+    def __init__(self, payload=None):
+        self.calls = []
+        self._payload = payload or {"albums": {"items": [], "total": 0}}
+
+    async def get(self, url, params=None):
+        self.calls.append((url, params or {}))
+        return FakeResponse(self._payload)
+
+
+class FakeClient:
+    def __init__(self, payload=None):
+        self.base = "https://qobuz.test/"
+        self.session = FakeSession(payload)
+
+    def require_account(self):
+        return None
+
+
+def fake_module(payload=None):
+    """An input module over a :class:`FakeClient`, built without logging in."""
+    client = FakeClient(payload)
+    module = QobuzInputModule.__new__(QobuzInputModule)
+    module.qobuz_client = client
+    module.format_id = 5
+    return module, client
 
 
 def _endpoint(request: httpx.Request) -> str:

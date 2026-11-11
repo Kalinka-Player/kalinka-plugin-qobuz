@@ -10,48 +10,11 @@ from kalinka_plugin_sdk.filters import FilterOp, FilterQuery, UnsupportedFilter
 from kalinka_plugin_sdk.inputmodule import ModuleCapability
 
 import kalinka_plugin_qobuz.qobuz as qz
-
-
-class _Response:
-    def __init__(self, payload):
-        self._payload = payload
-        self.is_success = True
-
-    def json(self):
-        return self._payload
-
-    def raise_for_status(self):
-        return None
-
-
-class _Session:
-    """Records every request; answers with an empty featured payload."""
-
-    def __init__(self, payload=None):
-        self.calls = []
-        self._payload = payload or {"albums": {"items": [], "total": 0}}
-
-    async def get(self, url, params=None):
-        self.calls.append((url, params or {}))
-        return _Response(self._payload)
-
-
-class _Client:
-    def __init__(self, payload=None):
-        self.base = "https://qobuz.test/"
-        self.session = _Session(payload)
-
-
-def _module(payload=None):
-    client = _Client(payload)
-    module = qz.QobuzInputModule.__new__(qz.QobuzInputModule)
-    module.qobuz_client = client
-    module.format_id = 5
-    return module, client
+from conftest import fake_module
 
 
 def test_qobuz_offers_its_catalogs_as_a_home_source():
-    module, _ = _module()
+    module, _ = fake_module()
     assert module.capabilities() == frozenset({ModuleCapability.CATALOGS})
 
 
@@ -86,7 +49,7 @@ def test_a_shelf_without_filters_declares_none():
 
 @pytest.mark.asyncio
 async def test_selected_genres_become_comma_joined_ids():
-    module, client = _module()
+    module, client = fake_module()
     await module.browse(
         _catalog("new-releases"), filter=_query({"genre": {"any": ["64", "112"]}})
     )
@@ -97,7 +60,7 @@ async def test_selected_genres_become_comma_joined_ids():
 
 @pytest.mark.asyncio
 async def test_an_unfiltered_shelf_sends_no_genre_ids():
-    module, client = _module()
+    module, client = fake_module()
     await module.browse(_catalog("new-releases"))
 
     _, params = client.session.calls[0]
@@ -107,7 +70,7 @@ async def test_an_unfiltered_shelf_sends_no_genre_ids():
 
 @pytest.mark.asyncio
 async def test_intersection_is_refused_rather_than_quietly_unioned():
-    module, client = _module()
+    module, client = fake_module()
     with pytest.raises(UnsupportedFilter) as excinfo:
         await module.browse(
             _catalog("new-releases"), filter=_query({"genre": {"all": ["64", "112"]}})
@@ -119,7 +82,7 @@ async def test_intersection_is_refused_rather_than_quietly_unioned():
 
 @pytest.mark.asyncio
 async def test_text_on_a_featured_shelf_is_refused():
-    module, client = _module()
+    module, client = fake_module()
     with pytest.raises(UnsupportedFilter) as excinfo:
         await module.browse(
             _catalog("new-releases"), filter=_query({"q": {"contains": "miles"}})
@@ -135,7 +98,7 @@ async def test_text_on_a_featured_shelf_is_refused():
     [EntityType.ALBUM, EntityType.ARTIST, EntityType.PLAYLIST],
 )
 async def test_a_listing_that_offers_no_filters_refuses_one(type):
-    module, client = _module()
+    module, client = fake_module()
     with pytest.raises(UnsupportedFilter):
         await module.browse(
             EntityId(id="1", type=type, source="qobuz"),
@@ -159,7 +122,7 @@ GENRES = {
 
 @pytest.mark.asyncio
 async def test_vocabulary_comes_from_qobuz_with_its_own_ids():
-    module, _ = _module(GENRES)
+    module, _ = fake_module(GENRES)
     values = await module.list_filter_values(_catalog("new-releases"), "genre")
 
     assert values.total == 3
@@ -168,7 +131,7 @@ async def test_vocabulary_comes_from_qobuz_with_its_own_ids():
 
 @pytest.mark.asyncio
 async def test_vocabulary_narrows_by_label():
-    module, _ = _module(GENRES)
+    module, _ = fake_module(GENRES)
     values = await module.list_filter_values(_catalog("new-releases"), "genre", q="cla")
 
     assert [value.name for value in values.items] == ["Classical"]
@@ -177,7 +140,7 @@ async def test_vocabulary_narrows_by_label():
 
 @pytest.mark.asyncio
 async def test_vocabulary_pages_what_it_counts():
-    module, client = _module(GENRES)
+    module, client = fake_module(GENRES)
     values = await module.list_filter_values(
         _catalog("new-releases"), "genre", offset=1, limit=1
     )
@@ -191,7 +154,7 @@ async def test_vocabulary_pages_what_it_counts():
 
 @pytest.mark.asyncio
 async def test_no_vocabulary_where_the_field_is_not_offered():
-    module, _ = _module(GENRES)
+    module, _ = fake_module(GENRES)
     with pytest.raises(UnsupportedFilter):
         await module.list_filter_values(_catalog("new-releases"), "year")
     with pytest.raises(UnsupportedFilter):
