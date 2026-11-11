@@ -657,6 +657,11 @@ class QobuzInputModule(InputModule):
     def capabilities(self) -> FrozenSet[ModuleCapability]:
         return frozenset({ModuleCapability.CATALOGS})
 
+    def root_preview(self) -> Optional[Preview]:
+        return Preview(
+            type=PreviewType.IMAGE_TEXT, content_type=PreviewContentType.CATALOG
+        )
+
     @_when_unlinked(_empty_page)
     async def search(
         self, type: SearchType, query: str, offset=0, limit=50
@@ -859,7 +864,7 @@ class QobuzInputModule(InputModule):
                         title="Playlist By Category",
                         filters=[GENRE_FILTER],
                         preview_config=Preview(
-                            type=PreviewType.TEXT_ONLY,
+                            type=PreviewType.IMAGE_TEXT,
                             content_type=PreviewContentType.CATALOG,
                             items_count=20,
                             rows_count=2,
@@ -1252,7 +1257,7 @@ class QobuzInputModule(InputModule):
                             id=artist_id(str(artist["id"])),
                             title="Albums",
                             preview_config=Preview(
-                                type=PreviewType.TILE,
+                                type=PreviewType.IMAGE_TEXT,
                                 content_type=PreviewContentType.ALBUM,
                                 items_count=10,
                                 rows_count=1,
