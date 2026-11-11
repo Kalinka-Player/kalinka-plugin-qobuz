@@ -190,6 +190,17 @@ GENRE_FILTERABLE = {
 }
 
 
+def _editorial_playlists_preview() -> Preview:
+    """Banner cards of Qobuz's curated playlists, all of them or one theme's."""
+    return Preview(
+        type=PreviewType.IMAGE_TEXT,
+        content_type=PreviewContentType.PLAYLIST,
+        rows_count=2,
+        items_count=20,
+        aspect_ratio=PLAYLIST_BANNER_RATIO,
+    )
+
+
 def _catalog_filters(endpoint: str) -> List[FilterSpec]:
     """What a shelf can be filtered by. Playlist categories are
     ``playlist-by-category_<slug>`` and filter like their parent."""
@@ -883,13 +894,7 @@ class QobuzInputModule(InputModule):
                         id=catalog_id("qobuz-playlists"),
                         title="Qobuz Playlists",
                         filters=[GENRE_FILTER],
-                        preview_config=Preview(
-                            type=PreviewType.IMAGE_TEXT,
-                            content_type=PreviewContentType.PLAYLIST,
-                            rows_count=2,
-                            items_count=20,
-                            aspect_ratio=PLAYLIST_BANNER_RATIO,
-                        ),
+                        preview_config=_editorial_playlists_preview(),
                         role=CatalogRole.HIDE_ON_HOME,
                     ),
                 ),
@@ -1070,10 +1075,7 @@ class QobuzInputModule(InputModule):
                         id=catalog_id("playlist-by-category_" + tags[i]["slug"]),
                         title=json.loads(tags[i]["name_json"])["en"],
                         filters=[GENRE_FILTER],
-                        preview_config=Preview(
-                            type=PreviewType.TEXT_ONLY,
-                            aspect_ratio=PLAYLIST_BANNER_RATIO,
-                        ),
+                        preview_config=_editorial_playlists_preview(),
                     ),
                 )
                 for i in range(len(tags))

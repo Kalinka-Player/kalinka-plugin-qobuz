@@ -1,5 +1,6 @@
-"""Which Qobuz listings a client opens as cards: every one of catalogs or
-albums, so the root and each shelf on it, and an artist's albums."""
+"""Which Qobuz listings a client opens as cards: every one of catalogs,
+albums or curated playlists, so the root and each shelf on it, each playlist
+theme, and an artist's albums."""
 
 import pytest
 from kalinka_plugin_sdk.datamodel import (
@@ -9,20 +10,18 @@ from kalinka_plugin_sdk.datamodel import (
     PreviewType,
 )
 
-import kalinka_plugin_qobuz.qobuz as qz
+from conftest import fake_module
 
 CARDS = (PreviewType.IMAGE_TEXT, PreviewType.CAROUSEL)
 
 
-class _Client:
-    def require_account(self):
-        return None
-
-
-def _module():
-    module = qz.QobuzInputModule.__new__(qz.QobuzInputModule)
-    module.qobuz_client = _Client()
+def _module(payload=None):
+    module, _ = fake_module(payload)
     return module
+
+
+def _catalog(slug):
+    return EntityId(id=slug, type=EntityType.CATALOG, source="qobuz")
 
 
 def test_the_root_opens_as_cards_of_its_catalogs():
@@ -33,14 +32,21 @@ def test_the_root_opens_as_cards_of_its_catalogs():
 
 @pytest.mark.asyncio
 async def test_every_shelf_on_the_root_opens_as_cards():
-    root = EntityId(id="root", type=EntityType.CATALOG, source="qobuz")
-    shelves = (await _module().browse(root)).items
+    shelves = (await _module().browse(_catalog("root"))).items
     assert shelves
     assert [
         shelf.name
         for shelf in shelves
         if shelf.catalog.preview_config.type not in CARDS
     ] == []
+
+
+@pytest.mark.asyncio
+async def test_each_playlist_theme_opens_as_cards_of_its_playlists():
+    tags = {"tags": [{"slug": "jazz", "name_json": '{"en": "Jazz"}'}]}
+    (theme,) = (await _module(tags).browse(_catalog("playlist-by-category"))).items
+    assert theme.catalog.preview_config.type == PreviewType.IMAGE_TEXT
+    assert theme.catalog.preview_config.content_type == PreviewContentType.PLAYLIST
 
 
 def test_an_artists_albums_open_as_cards():
