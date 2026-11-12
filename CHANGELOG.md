@@ -2,6 +2,12 @@
 
 Curated, user-facing notes per release. Add a `## <version>` section before tagging — the release workflow puts the matching section into the GitHub Release body.
 
+## 5.5.0
+
+### Changed
+- **Listings of catalogs and albums open as cards.** The Qobuz root, Playlist By Category and an artist's Albums opened as rows in the Kalinka app. Each now declares image cards, so every listing of catalogs or albums opens as a grid. The root's cards need Kalinka server 5.19, which brings plugin SDK 3.22; an older server keeps the root as rows.
+- **Each playlist theme opens as banner cards.** A theme under Playlist By Category, such as Jazz, listed its playlists as text rows; it now opens as banner cards, as Qobuz Playlists does.
+
 ## 5.4.0
 
 ### Added
