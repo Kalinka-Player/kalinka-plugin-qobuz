@@ -84,6 +84,18 @@ The player stays in the Qobuz app's device list while linked. After a restart it
 
 While linked, the player keeps listening for handoffs so the Qobuz app can hand its session over again. It accepts them only from the linked account.
 
+### Mood / AI search
+
+A search in the Kalinka app also asks Qobuz for playlists that suit what you typed, such as "rainy Sunday morning" or "workout". They are Qobuz's editorial playlists, matched on their names, genres, themes such as Summer or Christmas, and descriptions, and they show under *Inspired by your request*. A Kalinka app that predates playlist suggestions leaves them out.
+
+- **The setting.** *Mood / AI search* in Qobuz's settings, on by default. Changing it restarts Kalinka.
+- **What it needs.** The same text model Kalinka's other mood searches use. If its packages are missing, Qobuz's entry in the module list offers to install them.
+- **The first time.** Once the account is linked, the player reads every editorial playlist and turns its description into a vector. On a Raspberry Pi 5 that takes about three minutes, and suggestions show up once it is done.
+- **After that.** The player checks for new and changed playlists once a day and reads only those.
+- **What it leaves out.** Playlists listed only under Artists, Listening with... or Label Stories. Their descriptions are biographies, which match a mood on stray words.
+
+The vectors are kept in `/var/cache/kalinka/qobuz/playlists.sqlite`. Deleting the file only means the player reads the playlists again, at its next daily check or when Kalinka restarts.
+
 ### Unpairing
 
 A linked player refuses every other pairing attempt, from any phone, until you unpair it. This also holds after a restart or when the link has expired. To link another account:
@@ -139,9 +151,10 @@ The script automatically:
 The script automatically:
 - Builds the wheel first to detect the version
 - Generates Debian control files with the correct version
+- Writes the list of packages mood search may install, which needs the plugin SDK importable by `python3`
 - Creates a `.deb` package ready for installation
 
-The Debian package puts the wheel in `/opt/kalinka/wheels/` and tells the Kalinka server, which restarts and installs it into its venv.
+The Debian package puts the wheel in `/opt/kalinka/wheels/` and tells the Kalinka server, which restarts and installs it into its venv. The list goes to `/opt/kalinka/allowed_packages/qobuz.json`, and Kalinka installs nothing for the plugin that is not on it.
 
 ## Live smoke test
 

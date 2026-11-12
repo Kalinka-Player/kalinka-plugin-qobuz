@@ -23,6 +23,12 @@ VERSION="${VERSION%-py3-none-any.whl}"
 
 cp "${WHEEL_PATH}" pkgroot/opt/kalinka/wheels/
 
+# A script, not `-m`, so the build needs the plugin SDK alone, none of the
+# plugin's runtime deps.
+mkdir -p pkgroot/opt/kalinka/allowed_packages
+python3 src/kalinka_plugin_qobuz/optional_packages.py \
+    > pkgroot/opt/kalinka/allowed_packages/qobuz.json
+
 sed "s|@VERSION@|${VERSION}|g" debian/control.in > pkgroot/DEBIAN/control
 
 cp debian/triggers pkgroot/DEBIAN/triggers

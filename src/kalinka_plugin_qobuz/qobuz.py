@@ -21,6 +21,7 @@ from .config_model import QobuzAudioFormat, QobuzConfig
 
 if TYPE_CHECKING:
     from .account import AccountInfo
+    from .playlist_index import PlaylistIndex
 
 from kalinka_plugin_sdk.datamodel import (
     Album,
@@ -653,12 +654,14 @@ class QobuzInputModule(InputModule):
         self,
         config: QobuzConfig,
         qobuz_client: QobuzClient,
+        playlist_index: Optional["PlaylistIndex"] = None,
     ):
         self.format_id = (5, 6, 7, 27)[
             list(QobuzAudioFormat).index(QobuzAudioFormat(config.format))
         ]
         logger.info(f"Selecting Format '{config.format}', id = {self.format_id}")
         self.qobuz_client = qobuz_client
+        self._playlist_index = playlist_index
         self.last_update = LastUpdate()
         self.user_playlist = []
 
@@ -666,7 +669,16 @@ class QobuzInputModule(InputModule):
         return "Qobuz"
 
     def capabilities(self) -> FrozenSet[ModuleCapability]:
-        return frozenset({ModuleCapability.CATALOGS})
+        """Catalogs always; AI search only while the setting gave this module
+        a playlist index that can answer here and an account is linked."""
+        catalogs = frozenset({ModuleCapability.CATALOGS})
+        if self._playlist_index is None or not self._playlist_index.can_answer():
+            return catalogs
+        try:
+            self.qobuz_client.require_account()
+        except AuthenticationError:
+            return catalogs
+        return catalogs | {ModuleCapability.AI_SEARCH}
 
     def root_preview(self) -> Optional[Preview]:
         return Preview(
@@ -678,6 +690,42 @@ class QobuzInputModule(InputModule):
         self, type: SearchType, query: str, offset=0, limit=50
     ) -> BrowseItemList:
         return await self._search_items(type, query, offset, limit)
+
+    @_when_unlinked(_empty_page)
+    async def ai_search(
+        self, query: str, offset: int = 0, limit: int = 50
+    ) -> BrowseItemList:
+        """Qobuz's editorial playlists closest to a mood or a description,
+        as one card of playlists. Empty until the index has embedded them."""
+        if self._playlist_index is None or not query.strip():
+            return EmptyList(offset, limit)
+        # The index answers from disk, but nothing it suggests plays unlinked.
+        self.qobuz_client.require_account()
+        playlists = (await self._playlist_index.search(query, offset + limit))[offset:]
+        if not playlists:
+            return EmptyList(offset, limit)
+        items = self._playlists_to_browse_category(playlists)
+        card_id = catalog_id("ai-playlists")
+        card = BrowseItem(
+            id=card_id,
+            name="QOBUZ PLAYLISTS",
+            subname="Playlists matching this vibe",
+            can_browse=False,
+            can_add=False,
+            catalog=Catalog(
+                id=card_id,
+                title="QOBUZ PLAYLISTS",
+                sources=[card_id.source],
+                preview_config=Preview(
+                    type=PreviewType.CARD,
+                    content_type=PreviewContentType.PLAYLIST,
+                    icon="ai_suggestions",
+                    items_count=len(items),
+                ),
+            ),
+            sections=items,
+        )
+        return BrowseItemList(offset=offset, limit=limit, total=1, items=[card])
 
     @_when_unlinked(_empty_page)
     async def browse(

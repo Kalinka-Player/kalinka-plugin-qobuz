@@ -28,6 +28,9 @@ on:
 permissions:
   contents: write
 
+env:
+  KALINKA_SDK_REF: ${{ vars.KALINKA_SDK_REF || 'main' }}
+
 jobs:
   tests:
     name: Tests
@@ -48,6 +51,10 @@ jobs:
           # build/setuptools-scm are also installed by scripts/build_wheel.sh,
           # but pin them here so the environment is explicit.
           python3 -m pip install --upgrade --break-system-packages build setuptools-scm
+          # The optional-packages manifest is printed by the SDK, which is not
+          # on PyPI; named by URL as in tests.yml.
+          python3 -m pip install --break-system-packages \
+            "kalinka-plugin-sdk @ git+https://github.com/Kalinka-Player/KalinkaPlayer@${KALINKA_SDK_REF}#subdirectory=packages/kalinka-plugin-sdk"
 
       - name: Checkout (tag)
         uses: actions/checkout@v4

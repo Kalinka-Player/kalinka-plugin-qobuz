@@ -39,6 +39,8 @@ dependencies = [
     # committed bindings' generator (scripts/gen_proto.sh).
     "websockets>=13",
     "protobuf>=7.35,<8",
+    # Mood search: scoring every playlist's vector against the query's.
+    "numpy>=1.24",
 ]
 
 [project.optional-dependencies]

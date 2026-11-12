@@ -12,7 +12,7 @@ import pytest
 import pytest_asyncio
 from kalinka_plugin_sdk.datamodel import EntityId, EntityType, FavoriteIds
 from kalinka_plugin_sdk.events import TracksRemovedEvent
-from kalinka_plugin_sdk.inputmodule import SearchType, SourceUnavailableError
+from kalinka_plugin_sdk.inputmodule import ModuleCapability, SearchType, SourceUnavailableError
 from kalinka_plugin_sdk.module_health import ModuleHealthState
 
 from kalinka_plugin_qobuz import module_setup
@@ -59,6 +59,7 @@ class _Context:
         self.listener = _Listener()
         self.playqueue = _PlayQueueSpy()
         self.direct_playback = None
+        self.embedder = None
 
 
 async def _validate(client, holder):
@@ -95,11 +96,12 @@ async def cloud(monkeypatch):
     await fake.stop()
 
 
-async def _set_up(config=None, direct=None):
+async def _set_up(config=None, direct=None, embedder=None):
     plugin = module_setup.KalinkaPluginQobuz()
     context = _Context(config or QobuzConfig())
     if direct is not None:
         context.direct_playback = direct
+    context.embedder = embedder
     await plugin.setup(context)
     await settle(lambda: plugin._pairing.phase in (Phase.WAITING, Phase.LINKED))
     return plugin, context
@@ -226,6 +228,58 @@ async def test_shutdown_leaves_nothing_running(offline):
     with pytest.raises(OSError):
         await asyncio.open_connection("127.0.0.1", port)
     assert plugin._client.session.is_closed
+
+
+class _Embedder:
+    """The server's shared embedder, whose model is still on its way."""
+
+    model_id = "all-MiniLM-L6-v2"
+    model_version = 1
+
+    def __init__(self, missing: tuple[str, ...] = ()):
+        self._missing = list(missing)
+
+    async def available(self) -> bool:
+        await asyncio.Event().wait()
+        return True
+
+    def missing_runtime(self) -> list[str]:
+        return list(self._missing)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "config, embedder, offered",
+    [
+        pytest.param(QobuzConfig(), _Embedder(), True, id="on"),
+        pytest.param(QobuzConfig(ai_search_enabled=False), _Embedder(), False, id="off"),
+        pytest.param(QobuzConfig(), None, False, id="server without an embedder"),
+        pytest.param(
+            QobuzConfig(), _Embedder(missing=("onnxruntime",)), False, id="runtime missing"
+        ),
+    ],
+)
+async def test_mood_search_needs_the_setting_an_embedder_that_runs_here_and_a_link(
+    offline, config, embedder, offered
+):
+    plugin, _ = await _set_up(config, embedder=embedder)
+    assert ModuleCapability.AI_SEARCH not in plugin.get_interface().capabilities()
+
+    await _link_over_http(plugin)
+
+    capabilities = plugin.get_interface().capabilities()
+    assert (ModuleCapability.AI_SEARCH in capabilities) is offered
+    await plugin.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_shutdown_stops_the_playlist_refresh(offline):
+    before = asyncio.all_tasks()
+    plugin, _ = await _set_up(embedder=_Embedder())
+
+    await plugin.shutdown()
+
+    assert asyncio.all_tasks() - before == set()
 
 
 async def _link_over_http(plugin, **handoff):
