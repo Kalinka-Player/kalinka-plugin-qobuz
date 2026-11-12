@@ -215,12 +215,13 @@ class FakeClient:
         return None
 
 
-def fake_module(payload=None):
+def fake_module(payload=None, playlist_index=None):
     """An input module over a :class:`FakeClient`, built without logging in."""
     client = FakeClient(payload)
     module = QobuzInputModule.__new__(QobuzInputModule)
     module.qobuz_client = client
     module.format_id = 5
+    module._playlist_index = playlist_index
     return module, client
 
 

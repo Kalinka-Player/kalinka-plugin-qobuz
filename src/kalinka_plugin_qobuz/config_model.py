@@ -42,6 +42,21 @@ class QobuzConfig(ModuleConfig):
         title="Audio quality",
         json_schema_extra={"importance": "simple", "setup": "prompt"},
     )
+    ai_search_enabled: bool = Field(
+        default=True,
+        title="Mood / AI search",
+        description=(
+            "Suggest Qobuz's editorial playlists for a mood or description, "
+            "e.g. \"rainy Sunday morning\". The first time, this player reads "
+            "the playlists' descriptions, which takes a few minutes."
+        ),
+        # Its runtime installs at the next start.
+        json_schema_extra={
+            "importance": "simple",
+            "setup": "prompt",
+            "apply": "restart_required",
+        },
+    )
     unpair: bool = Field(
         default=False,
         title="Unpair Qobuz account on next restart",

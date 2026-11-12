@@ -5,6 +5,7 @@ time, so a renewed or cleared credential reaches every request in flight from
 then on, whoever holds the client.
 """
 
+import asyncio
 import hashlib
 import logging
 import math
@@ -89,6 +90,7 @@ class TokenHolder:
         self._credential: Optional[Credential] = None
         self._reason = unavailable_reason
         self.generation = 0
+        self._installed = asyncio.Event()
 
     @property
     def credential(self) -> Optional[Credential]:
@@ -102,11 +104,17 @@ class TokenHolder:
     def install(self, credential: Credential) -> None:
         self._credential = credential
         self.generation += 1
+        self._installed.set()
 
     def clear(self, reason: str) -> None:
         self._credential = None
         self._reason = reason
         self.generation += 1
+        self._installed.clear()
+
+    async def wait_for_credential(self) -> None:
+        """Return once a credential is in force: at once while one is."""
+        await self._installed.wait()
 
 
 RenewHook = Callable[[Credential], Awaitable[bool]]

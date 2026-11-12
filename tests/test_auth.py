@@ -1,5 +1,7 @@
 """One place decides which credential header a Qobuz request carries."""
 
+import asyncio
+
 import httpx
 import pytest
 
@@ -119,6 +121,24 @@ def test_the_holder_counts_every_change():
     assert holder.generation == 2
     with pytest.raises(AuthenticationError, match="not linked"):
         holder.current()
+
+
+@pytest.mark.asyncio
+async def test_waiting_for_a_credential_ends_when_one_is_installed_and_holds_once_cleared():
+    holder = TokenHolder()
+    waiting = asyncio.create_task(holder.wait_for_credential())
+    await asyncio.sleep(0)
+    assert not waiting.done()
+
+    holder.install(bearer())
+    await asyncio.wait_for(waiting, timeout=1)
+    await asyncio.wait_for(holder.wait_for_credential(), timeout=1)
+
+    holder.clear(NOT_LINKED)
+    again = asyncio.create_task(holder.wait_for_credential())
+    await asyncio.sleep(0)
+    assert not again.done()
+    again.cancel()
 
 
 def test_a_sync_client_is_refused():
