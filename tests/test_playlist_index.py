@@ -151,6 +151,16 @@ async def _eventually(condition, timeout: float = 5) -> None:
         await asyncio.sleep(0.01)
 
 
+async def _eventually_found(index, query: str, ids: list[int], timeout: float = 5) -> None:
+    """Search until the answer is ``ids``: a refresh makes what it embedded
+    searchable only once it has stored all of it."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while _ids(await index.search(query, 10)) != ids:
+        assert loop.time() < deadline, f"{query!r} never found {ids}"
+        await asyncio.sleep(0.01)
+
+
 def _ids(records: list[dict]) -> list[int]:
     return [record["id"] for record in records]
 
@@ -309,8 +319,7 @@ async def test_run_neither_lists_nor_loads_the_embedder_until_an_account_is_link
         assert not embedder.checked
 
         link.link()
-        await _eventually(lambda: len(embedder.embedded) == 1)
-        assert _ids(await index.search("rain", 10)) == [1]
+        await _eventually_found(index, "rain", [1])
     finally:
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
