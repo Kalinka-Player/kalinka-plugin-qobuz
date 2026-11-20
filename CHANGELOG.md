@@ -2,6 +2,11 @@
 
 Curated, user-facing notes per release. Add a `## <version>` section before tagging — the release workflow puts the matching section into the GitHub Release body.
 
+## 5.6.0
+
+### Added
+- **AI search suggests Qobuz playlists.** A search in the Kalinka app also asks Qobuz for its editorial playlists that suit what you typed, such as "rainy Sunday morning" or "workout", matched on their names, genres, themes and descriptions. They show under *Inspired by your request* in Kalinka app 0.28.0 or newer; an older app leaves them out. The suggestions use the text model Kalinka's other mood searches use; if its packages are missing, Qobuz's entry in the module list offers to install them. The first scan after an account is linked takes about three minutes on a Raspberry Pi 5, and the player then reads only new and changed playlists once a day. The new *Mood / AI search* setting, on by default, turns this off.
+
 ## 5.5.0
 
 ### Changed
