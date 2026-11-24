@@ -29,7 +29,7 @@ dependencies = [
     # 3.15: Track carries track_number and disc_number from Qobuz metadata.
     # 3.16: CoverImage carries aspect_ratio, the shape of a playlist's banner.
     # 3.18: packaged small and standard source artwork.
-    "kalinka-plugin-sdk>=3.18,<4",
+    "kalinka-plugin-sdk>=3.24,<4",
     "httpx[http2]>=0.24",
     # Qobuz Connect pairing: the local handoff endpoint and its mDNS advert.
     "h11>=0.14",

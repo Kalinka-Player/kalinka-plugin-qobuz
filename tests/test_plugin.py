@@ -11,7 +11,8 @@ import httpx
 import pytest
 import pytest_asyncio
 from kalinka_plugin_sdk.datamodel import EntityId, EntityType, FavoriteIds
-from kalinka_plugin_sdk.events import TracksRemovedEvent
+from kalinka_plugin_sdk.datamodel import PlaybackState
+from kalinka_plugin_sdk.events import PlaybackStateChangedEvent
 from kalinka_plugin_sdk.inputmodule import ModuleCapability, SearchType, SourceUnavailableError
 from kalinka_plugin_sdk.module_health import ModuleHealthState
 
@@ -205,12 +206,16 @@ async def test_an_armed_unpair_forgets_the_link_and_reopens_pairing(offline):
 
 
 @pytest.mark.asyncio
-async def test_a_failing_event_does_not_stop_autoplay_and_reporting(offline, caplog):
+async def test_a_failing_event_does_not_stop_reporting(offline, caplog, monkeypatch):
     plugin, context = await _set_up()
 
+    def fails(self, event):
+        raise RuntimeError("Qobuz unreachable")
+
+    monkeypatch.setattr(module_setup.QobuzReporter, "on_state_changed", fails)
     with caplog.at_level(logging.WARNING):
-        await context.listener.events.put(TracksRemovedEvent(indices=[5]))
-        await settle(lambda: "could not handle TracksRemovedEvent" in caplog.text)
+        await context.listener.events.put(PlaybackStateChangedEvent(state=PlaybackState()))
+        await settle(lambda: "could not handle PlaybackStateChangedEvent" in caplog.text)
 
     assert not plugin._qobuz_tasks.done()
     await plugin.shutdown()

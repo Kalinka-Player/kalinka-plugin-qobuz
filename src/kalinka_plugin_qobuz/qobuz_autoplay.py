@@ -1,115 +1,80 @@
 import logging
+from typing import Optional
 
 from kalinka_plugin_sdk.datamodel import Track
-from kalinka_plugin_sdk.api import PlayQueueController
-from kalinka_plugin_sdk.inputmodule import InputModule
-from kalinka_plugin_sdk.events import (
-    TracksAddedEvent,
-    RequestMoreTracksEvent,
-    TracksRemovedEvent,
-)
-
-from .qobuz import QobuzClient
+from kalinka_plugin_sdk.inputmodule import ContinuationRequest
 
 logger = logging.getLogger(__name__.split(".")[-1])
 
+#: Seeds Qobuz is asked to analyse, the latest heard.
+SEEDS_ANALYSED = 5
+
+
+def autoplay_seed(track: Track) -> dict:
+    """What Qobuz's suggestion service reads of one seed track."""
+    return {
+        "artist_id": int(track.performer.id.id) if track.performer else None,
+        "genre_id": (int(track.album.genres[0].id.id) if track.album.genres else None),
+        "label_id": int(track.album.label.id.id) if track.album.label else None,
+        "track_id": int(track.id.id) if track.id else None,
+    }
+
 
 class QobuzAutoplay:
-    def __init__(
-        self,
-        qobuz_client: QobuzClient,
-        playqueue: PlayQueueController,
-        track_browser: InputModule,
-        amount_to_request: int = 50,
-    ):
+    """
+    @brief Proposes Qobuz tracks that carry a queue on, from Qobuz's own
+    suggestion service (``dynamic/suggest``).
+
+    One request returns a batch; proposals are served from it until it runs
+    dry or the listener turns a track down, when a new batch is asked for with
+    the queue's latest seeds. Never touches the play queue: the server appends
+    what it proposes.
+    """
+
+    def __init__(self, qobuz_client, to_track, amount_to_request: int = 50):
+        """
+        @param qobuz_client The linked Qobuz client.
+        @param to_track Turns a Qobuz track body into an SDK Track.
+        @param amount_to_request Suggestions asked for at a time.
+        """
         self.qobuz_client = qobuz_client
-        self.playqueue = playqueue
-        self.track_browser = track_browser
-        self.remaining_tracks: list[str] = []
-        self.suggested_tracks: set[str] = set()
+        self._to_track = to_track
         self.amount_to_request = amount_to_request
-        self.tracks: list[Track] = []
-        self.can_request_new = True
+        self.remaining_tracks: list[str] = []
+        self._avoided: Optional[frozenset[str]] = None
 
-    def _track_meta_to_autoplay(self, track: Track) -> dict:
-        return {
-            "artist_id": int(track.performer.id.id) if track.performer else None,
-            "genre_id": (
-                int(track.album.genres[0].id.id) if track.album.genres else None
-            ),
-            "label_id": int(track.album.label.id.id) if track.album.label else None,
-            "track_id": int(track.id.id) if track.id else None,
-        }
+    async def propose(self, request: ContinuationRequest) -> list[str]:
+        unwanted = set(request.exclude) | set(request.avoid)
+        if self._avoided != frozenset(request.avoid):
+            self.remaining_tracks = []
+        self._avoided = frozenset(request.avoid)
+        fresh = [t for t in self.remaining_tracks if t not in unwanted]
+        if len(fresh) < request.count:
+            fresh = [t for t in await self._suggest(request) if t not in unwanted]
+        proposed, self.remaining_tracks = fresh[: request.count], fresh[request.count :]
+        return proposed
 
-    def add_tracks(self, event: TracksAddedEvent) -> None:
-        self.tracks.extend(event.tracks)
-        self.can_request_new = True
-
-    def remove_tracks(self, event: TracksRemovedEvent) -> None:
-        for track in event.indices:
-            del self.tracks[track]
-
-        if not self._has_any_qobuz_tracks():
-            self.can_request_new = True
-            self.suggested_tracks.clear()
-            self.remaining_tracks.clear()
-
-    def _has_any_qobuz_tracks(self) -> bool:
-        return any(track.id.source == "qobuz" for track in self.tracks)
-
-    async def add_recommendation(self, _event: RequestMoreTracksEvent) -> None:
-        if not self.remaining_tracks:
-            if self.can_request_new:
-                await self._retrieve_new_recommendations()
-
-        if not self.remaining_tracks:
-            logger.info("No tracks to recommend")
-            return
-
-        recommended_track = self.remaining_tracks.pop(0)
-        self.suggested_tracks.add(recommended_track)
-        await self.playqueue.add(
-            await self.track_browser.get_track_info([recommended_track])
-        )
-
-    async def _retrieve_new_recommendations(self) -> None:
-        tracks = [track for track in self.tracks if track.id.source == "qobuz"]
-        if not tracks:
-            logger.debug("No Qobuz tracks available for recommendation")
-            return
-
-        five_tracks_to_analyse = []
-        for i in range(len(tracks) - 1, -1, -1):
-            if len(five_tracks_to_analyse) == 5:
-                break
-            if tracks[i].id.id not in self.suggested_tracks:
-                five_tracks_to_analyse.append(tracks[i])
-
-        tracks_to_analyze = [
-            self._track_meta_to_autoplay(track) for track in five_tracks_to_analyse
-        ]
-        tta_ids = [track.id.id for track in five_tracks_to_analyse]
-        listened_tracks = [
-            int(track.id.id) for track in tracks if track.id.id not in tta_ids
-        ]
-        params = {
-            "limit": self.amount_to_request,
-            "listened_tracks_ids": listened_tracks,
-            "track_to_analysed": tracks_to_analyze,
-        }
-
-        req = await self.qobuz_client.session.post(
+    async def _suggest(self, request: ContinuationRequest) -> list[str]:
+        seeds = [s for s in request.seeds if s not in request.avoid][-SEEDS_ANALYSED:]
+        if not seeds:
+            logger.debug("No Qobuz tracks to continue from")
+            return []
+        bodies = await self.qobuz_client.get_tracks_meta([int(s) for s in seeds])
+        listened = [int(t) for t in request.exclude if t.isdigit() and t not in seeds]
+        response = await self.qobuz_client.session.post(
             self.qobuz_client.base + "dynamic/suggest",
-            json=params,
+            json={
+                "limit": self.amount_to_request,
+                "listened_tracks_ids": listened,
+                "track_to_analysed": [autoplay_seed(self._to_track(body)) for body in bodies],
+            },
         )
-
-        track_ids = [track["id"] for track in req.json()["tracks"]["items"]]
-
+        response.raise_for_status()
+        body = response.json()
+        track_ids = [str(track["id"]) for track in body["tracks"]["items"]]
         logger.info(
             "Retrieved %d new recommendation(s) using algorithm %s",
             len(track_ids),
-            req.json()["algorithm"],
+            body.get("algorithm"),
         )
-
-        self.remaining_tracks = track_ids
-        self.can_request_new = False
+        return track_ids

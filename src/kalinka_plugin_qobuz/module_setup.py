@@ -7,9 +7,6 @@ from kalinka_plugin_sdk import (
     OptionalPackageSpec,
     PlayQueueEventType,
     PlaybackStateChangedEvent,
-    RequestMoreTracksEvent,
-    TracksAddedEvent,
-    TracksRemovedEvent,
     wheel_architecture,
 )
 from kalinka_plugin_sdk.module_health import ModuleHealthState, ModuleState
@@ -33,7 +30,6 @@ from .playlist_index import (
     default_index_path,
     editorial_playlists,
 )
-from .qobuz_autoplay import QobuzAutoplay
 from .qobuz_reporter import QobuzReporter
 from .qobuz import QobuzClient, QobuzInputModule
 
@@ -47,7 +43,7 @@ _KEY_BY_IMPORT_NAME = {
 
 
 class KalinkaPluginQobuz(InputModulePlugin):
-    REQUIRES_SDK = ">=3.18,<4"
+    REQUIRES_SDK = ">=3.24,<4"
     PLUGIN_ID = "qobuz"
     CONFIG_MODEL = QobuzConfig
     OPTIONAL_PACKAGES: ClassVar[dict[str, OptionalPackageSpec]] = OPTIONAL_PACKAGES
@@ -174,35 +170,19 @@ class KalinkaPluginQobuz(InputModulePlugin):
         if self.interface is None:
             return
 
-        autoplay = QobuzAutoplay(
-            qobuz_client=client,
-            playqueue=context.playqueue,
-            track_browser=self.interface,
-        )
         self.reporter = QobuzReporter(client)
 
         try:
             async with context.listener.stream(
-                [
-                    PlayQueueEventType.RequestMoreTracks,
-                    PlayQueueEventType.TracksAdded,
-                    PlayQueueEventType.TracksRemoved,
-                    PlayQueueEventType.PlaybackStateChanged,
-                ]
+                [PlayQueueEventType.PlaybackStateChanged]
             ) as stream:  # pyright: ignore[reportGeneralTypeIssues]
                 async for item in stream:
                     try:
-                        if isinstance(item, RequestMoreTracksEvent):
-                            await autoplay.add_recommendation(item)
-                        elif isinstance(item, TracksAddedEvent):
-                            autoplay.add_tracks(item)
-                        elif isinstance(item, TracksRemovedEvent):
-                            autoplay.remove_tracks(item)
-                        elif isinstance(item, PlaybackStateChangedEvent):
+                        if isinstance(item, PlaybackStateChangedEvent):
                             self.reporter.on_state_changed(item)
                     except Exception as e:
                         # One failed event (Qobuz unlinked, a network blip) must
-                        # not stop autoplay and reporting for the whole session.
+                        # not stop reporting for the whole session.
                         logger.warning("Qobuz could not handle %s: %s", type(item).__name__, e)
 
         except asyncio.CancelledError:
