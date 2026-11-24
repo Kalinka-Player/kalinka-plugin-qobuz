@@ -73,10 +73,9 @@ async def test_an_unlinked_source_suggests_nothing():
 
 
 def test_ai_search_is_offered_only_with_an_index_that_can_answer():
+    linked = {ModuleCapability.CATALOGS, ModuleCapability.CONTINUATION}
     module, _ = fake_module(playlist_index=FixedIndex())
-    assert module.capabilities() == frozenset(
-        {ModuleCapability.CATALOGS, ModuleCapability.AI_SEARCH}
-    )
+    assert module.capabilities() == frozenset(linked | {ModuleCapability.AI_SEARCH})
 
     for without in (fake_module()[0], fake_module(playlist_index=FixedIndex(answers=False))[0]):
-        assert without.capabilities() == frozenset({ModuleCapability.CATALOGS})
+        assert without.capabilities() == frozenset(linked)

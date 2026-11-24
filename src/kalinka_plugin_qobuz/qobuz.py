@@ -18,6 +18,7 @@ from pydantic import BaseModel, PositiveInt
 from .auth import AuthenticationError, QobuzAuth
 from .bundle import load_bundle
 from .config_model import QobuzAudioFormat, QobuzConfig
+from .qobuz_autoplay import QobuzAutoplay
 
 if TYPE_CHECKING:
     from .account import AccountInfo
@@ -57,6 +58,7 @@ from kalinka_plugin_sdk.filters import (
 )
 from kalinka_plugin_sdk.inputmodule import (
     ContentInfo,
+    ContinuationRequest,
     DirectUrl,
     InputModule,
     ModuleCapability,
@@ -579,6 +581,10 @@ def _empty_page(arguments: dict) -> BrowseItemList:
     return EmptyList(arguments["offset"], arguments["limit"])
 
 
+def _no_tracks(_arguments: dict) -> list:
+    return []
+
+
 def _no_filter_values(arguments: dict) -> FilterValueList:
     return FilterValueList(
         offset=arguments["offset"], limit=arguments["limit"], total=0, items=[]
@@ -662,6 +668,7 @@ class QobuzInputModule(InputModule):
         logger.info(f"Selecting Format '{config.format}', id = {self.format_id}")
         self.qobuz_client = qobuz_client
         self._playlist_index = playlist_index
+        self._autoplay = QobuzAutoplay(qobuz_client, metadata_from_track)
         self.last_update = LastUpdate()
         self.user_playlist = []
 
@@ -669,16 +676,24 @@ class QobuzInputModule(InputModule):
         return "Qobuz"
 
     def capabilities(self) -> FrozenSet[ModuleCapability]:
-        """Catalogs always; AI search only while the setting gave this module
-        a playlist index that can answer here and an account is linked."""
+        """Catalogs always; continuation while an account is linked; AI search
+        only while the setting gave this module a playlist index that can
+        answer here and an account is linked."""
         catalogs = frozenset({ModuleCapability.CATALOGS})
-        if self._playlist_index is None or not self._playlist_index.can_answer():
-            return catalogs
         try:
             self.qobuz_client.require_account()
         except AuthenticationError:
             return catalogs
-        return catalogs | {ModuleCapability.AI_SEARCH}
+        linked = catalogs | {ModuleCapability.CONTINUATION}
+        if self._playlist_index is None or not self._playlist_index.can_answer():
+            return linked
+        return linked | {ModuleCapability.AI_SEARCH}
+
+    @_when_unlinked(_no_tracks)
+    async def continue_queue(self, request: ContinuationRequest) -> list[str]:
+        """Qobuz's own suggestions for the queued Qobuz tracks."""
+        self.qobuz_client.require_account()
+        return await self._autoplay.propose(request)
 
     def root_preview(self) -> Optional[Preview]:
         return Preview(

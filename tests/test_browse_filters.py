@@ -15,7 +15,7 @@ from conftest import fake_module
 
 def test_qobuz_offers_its_catalogs_as_a_home_source():
     module, _ = fake_module()
-    assert module.capabilities() == frozenset({ModuleCapability.CATALOGS})
+    assert ModuleCapability.CATALOGS in module.capabilities()
 
 
 def _catalog(slug: str) -> EntityId:
