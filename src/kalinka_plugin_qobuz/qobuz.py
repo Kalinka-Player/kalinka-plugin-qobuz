@@ -1,5 +1,4 @@
 import asyncio
-import copy
 import functools
 import hashlib
 import inspect
@@ -13,11 +12,12 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Callable, FrozenSet, List, Optional
 
 import httpx
-from pydantic import BaseModel, PositiveInt
+from pydantic import PositiveInt
 
-from .auth import AuthenticationError, QobuzAuth
+from .auth import REJECTED_LINK, AuthenticationError, QobuzAuth
 from .bundle import load_bundle
 from .config_model import QobuzAudioFormat, QobuzConfig
+from .favourites import Favourites
 from .qobuz_autoplay import QobuzAutoplay
 
 if TYPE_CHECKING:
@@ -193,6 +193,43 @@ GENRE_FILTERABLE = {
 }
 
 
+# The catalogs under My Favourites, and the kind of favourite each lists.
+FAVOURITE_CATALOGS = {
+    "favourite-tracks": ("Favourite Tracks", SearchType.track),
+    "favourite-albums": ("Favourite Albums", SearchType.album),
+    "favourite-artists": ("Favourite Artists", SearchType.artist),
+    "favourite-playlists": ("Favourite Playlists", SearchType.playlist),
+}
+
+
+def _favourite_catalogs() -> List[BrowseItem]:
+    return [
+        BrowseItem(
+            id=catalog_id(key),
+            name=title,
+            can_browse=True,
+            can_add=False,
+            catalog=Catalog(
+                id=catalog_id(key),
+                title=title,
+                preview_config=Preview(
+                    type=(
+                        PreviewType.TILE
+                        if kind == SearchType.track
+                        else PreviewType.IMAGE_TEXT
+                    ),
+                    content_type=PreviewContentType(kind.value),
+                    items_count=10,
+                    rows_count=2,
+                    aspect_ratio=1.0,
+                ),
+                role=CatalogRole.LIBRARY,
+            ),
+        )
+        for key, (title, kind) in FAVOURITE_CATALOGS.items()
+    ]
+
+
 def _editorial_playlists_preview() -> Preview:
     """Banner cards of Qobuz's curated playlists, all of them or one theme's."""
     return Preview(
@@ -236,13 +273,6 @@ def user_id(id: str) -> EntityId:
 
 def catalog_id(id: str) -> EntityId:
     return EntityId(id=id, type=EntityType.CATALOG, source="qobuz")
-
-
-class LastUpdate(BaseModel):
-    favorite_tracks_ts: int = 0
-    favorite_albums_ts: int = 0
-    favorite_artists_ts: int = 0
-    favorite_playlists_ts: int = 0
 
 
 class QobuzClient:
@@ -305,8 +335,6 @@ class QobuzClient:
         """Forget everything learnt from the previous account."""
         # a short living cache to be used for reporting purposes
         self.track_url_response_cache = {}
-        self.last_update = LastUpdate()
-        self.cached = {"albums": {}, "artists": {}, "tracks": {}, "playlists": {}}
 
     async def aclose(self) -> None:
         await self.session.aclose()
@@ -422,12 +450,6 @@ class QobuzClient:
         r.raise_for_status()
         return r.json()["tracks"]["items"]
 
-    async def get_qobuz_last_update(self):
-        r = await self.session.get(self.base + "user/lastUpdate")
-        r.raise_for_status()
-
-        return r.json()["last_update"]
-
     async def get_user_playlists(self, offset: int = 0, limit: int = 50, owner_id=None):
         # Owner filtering has to happen locally, which breaks server-side
         # pagination (a page of raw results shrinks unpredictably after
@@ -458,41 +480,6 @@ class QobuzClient:
         }
 
         return {"playlists": playlists}
-
-    async def get_user_favorites(
-        self, type: SearchType, offset: int = 0, limit: int = 50
-    ):
-        last_update = (await self.get_qobuz_last_update())[
-            {
-                SearchType.album: "favorite_album",
-                SearchType.artist: "favorite_artist",
-                SearchType.track: "favorite_track",
-            }[type]
-        ]
-
-        type_name = f"{type.name}s"
-
-        if last_update != getattr(self.last_update, f"favorite_{type_name}_ts"):
-            logger.info(f"Updating user favorites cache for {type_name}")
-            r = await self.session.get(
-                self.base + "favorite/getUserFavorites",
-                params={"type": type.value + "s", "offset": 0, "limit": 500},
-            )
-
-            r.raise_for_status()
-
-            self.cached[type_name] = copy.deepcopy(r.json()[type_name])
-
-            setattr(self.last_update, f"favorite_{type_name}_ts", last_update)
-
-        retval = {
-            "offset": offset,
-            "limit": limit,
-            "total": len(self.cached[type_name]["items"]),
-            "items": self.cached[type_name]["items"][offset : offset + limit],
-        }
-
-        return {type_name: retval}
 
 
 @dataclass(frozen=True)
@@ -533,7 +520,6 @@ def _served_banner(url):
     return f"/content/qobuz/{BANNER_ASSET}{name}"
 
 
-REJECTED_LINK = "Qobuz did not accept this player's link. If it persists, unpair Qobuz and pair again."
 STILL_CONNECTING = "Qobuz is still connecting to your account. Try again in a moment."
 
 
@@ -669,8 +655,7 @@ class QobuzInputModule(InputModule):
         self.qobuz_client = qobuz_client
         self._playlist_index = playlist_index
         self._autoplay = QobuzAutoplay(qobuz_client)
-        self.last_update = LastUpdate()
-        self.user_playlist = []
+        self._favourites = Favourites(qobuz_client)
 
     def module_name(self) -> str:
         return "Qobuz"
@@ -850,29 +835,10 @@ class QobuzInputModule(InputModule):
     async def list_favorite(
         self, type: SearchType, filter: str, offset: int = 0, limit: int = 50
     ) -> BrowseItemList:
-        if type == SearchType.playlist:
-            rjson = await self.qobuz_client.get_user_playlists(offset=0, limit=500)
-        else:
-            rjson = await self.qobuz_client.get_user_favorites(
-                type, offset=0, limit=500
-            )
-
-        result = self._format_list_response(rjson, offset, limit)
-        filtered_items = [
-            item
-            for item in result.items
-            if (item.name and filter.lower() in item.name.lower())
-            or (item.subname and filter.lower() in item.subname.lower())
-        ]
-
-        filtered_result = BrowseItemList(
-            offset=offset,
-            limit=limit,
-            total=len(filtered_items),
-            items=filtered_items[offset : offset + limit],
-        )
-
-        return filtered_result
+        if filter:
+            raise UnsupportedFilter("filter", "Qobuz cannot search favourites")
+        rjson = await self._favourites.page(type, offset, limit)
+        return self._format_list_response(rjson, offset, limit)
 
     async def _browse_catalog(
         self,
@@ -1003,12 +969,40 @@ class QobuzInputModule(InputModule):
                         role=CatalogRole.DISCOVERY,
                     ),
                 ),
+                BrowseItem(
+                    id=catalog_id("favourites"),
+                    name="My Favourites",
+                    subname="The tracks, albums, artists and playlists you have marked",
+                    can_browse=True,
+                    can_add=False,
+                    catalog=Catalog(
+                        id=catalog_id("favourites"),
+                        title="My Favourites",
+                        preview_config=Preview(
+                            type=PreviewType.IMAGE_TEXT,
+                            content_type=PreviewContentType.CATALOG,
+                        ),
+                        role=CatalogRole.INDEX,
+                    ),
+                ),
             ]
             return BrowseItemList(
                 offset=offset,
                 limit=limit,
                 total=len(all_items),
                 items=all_items[offset : offset + limit],
+            )
+        elif endpoint == "favourites":
+            catalogs = _favourite_catalogs()
+            return BrowseItemList(
+                offset=offset,
+                limit=limit,
+                total=len(catalogs),
+                items=catalogs[offset : offset + limit],
+            )
+        elif endpoint in FAVOURITE_CATALOGS:
+            return await self.list_favorite(
+                FAVOURITE_CATALOGS[endpoint][1], "", offset, limit
             )
         elif endpoint == "recent-releases":
             res = await self._get_new_releases(
@@ -1553,73 +1547,19 @@ class QobuzInputModule(InputModule):
 
     @_when_unlinked(lambda arguments: FavoriteIds())
     async def get_favorite_ids(self) -> FavoriteIds:
-        response = await self.qobuz_client.session.get(
-            self.qobuz_client.base + "favorite/getUserFavoriteIds",
-            params={"limit": 5000},
-        )
-
-        if response.is_success != True:
-            return FavoriteIds()
-
-        rjson = response.json()
-
+        ids = await self._favourites.ids()
         return FavoriteIds(
-            albums=[album_id(str(id)) for id in rjson["albums"]],
-            artists=[artist_id(str(id)) for id in rjson["artists"]],
-            tracks=[track_id(str(id)) for id in rjson["tracks"]],
-            playlists=await self._get_favorite_playlist_ids(),
+            albums=[album_id(id) for id in ids[EntityType.ALBUM]],
+            artists=[artist_id(id) for id in ids[EntityType.ARTIST]],
+            tracks=[track_id(id) for id in ids[EntityType.TRACK]],
+            playlists=[playlist_id(id) for id in ids[EntityType.PLAYLIST]],
         )
-
-    async def _get_favorite_playlist_ids(self) -> list[EntityId]:
-        rjson = await self.qobuz_client.get_user_playlists(limit=500)
-
-        return [
-            playlist_id(str(playlist["id"])) for playlist in rjson["playlists"]["items"]
-        ]
 
     async def add_to_favorite(self, id: str):
-        entity_id = EntityId.from_string(id)
-
-        if entity_id.type == EntityType.PLAYLIST:
-            endpoint = "playlist/subscribe"
-            params = {"playlist_id": entity_id.id}
-        else:
-            endpoint = "favorite/create"
-            params = {entity_id.type.value + "_ids": entity_id.id}
-
-        response = await self.qobuz_client.session.post(
-            self.qobuz_client.base + endpoint, params=params
-        )
-
-        response.raise_for_status()
-
-        rjson = response.json()
-
-        logger.info(f"Add to favorite response: {rjson}")
-
-        if "status" not in rjson or rjson["status"] != "success":
-            raise Exception(f"Failed to add to favorite: {response.text}")
+        await self._favourites.add(EntityId.from_string(id))
 
     async def remove_from_favorite(self, id: str):
-        entity_id = EntityId.from_string(id)
-
-        if entity_id.type == EntityType.PLAYLIST:
-            endpoint = "playlist/unsubscribe"
-            params = {"playlist_id": entity_id.id}
-        else:
-            endpoint = "favorite/delete"
-            params = {entity_id.type.value + "_ids": entity_id.id}
-
-        response = await self.qobuz_client.session.post(
-            self.qobuz_client.base + endpoint, params=params
-        )
-
-        response.raise_for_status()
-
-        rjson = response.json()
-
-        if "status" not in rjson or rjson["status"] != "success":
-            raise Exception(f"Failed to remove from favorite: {response.text}")
+        await self._favourites.remove(EntityId.from_string(id))
 
     @_when_unlinked(_no_filter_values)
     async def list_filter_values(

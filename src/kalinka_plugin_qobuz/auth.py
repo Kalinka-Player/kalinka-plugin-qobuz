@@ -18,6 +18,9 @@ import httpx
 logger = logging.getLogger(__name__.split(".")[-1])
 
 
+REJECTED_LINK = "Qobuz did not accept this player's link. If it persists, unpair Qobuz and pair again."
+
+
 class AuthenticationError(Exception):
     """No usable Qobuz credential. The message is shown to users."""
 
