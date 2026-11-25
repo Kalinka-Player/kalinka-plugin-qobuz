@@ -167,8 +167,10 @@ Run this on a real player with a Qobuz subscription before releasing. Use throwa
    ```
 2. Choose the player in the Qobuz app. Follow the server log (`journalctl -u kalinka -f`). Note the handoff's key names and claim names, which account endpoint answered, and each check. The "Qobuz account linked" line names the credential kept: `user_auth_token`, or `bearer` if Qobuz issued none.
 3. In Kalinka, confirm the status reads **Linked**. Then:
-   - browse Qobuz, your favourites and your playlists;
-   - add and remove a favourite, and create and delete a playlist;
+   - browse Qobuz, **My Favourites** and your playlists; each kind of favourite lists what the Qobuz app lists, past its five-hundredth, and note whether the most recently marked comes first;
+   - mark and unmark a track, an album, an artist and one of Qobuz's playlists, and see each change in the Qobuz app;
+   - try to mark a playlist of your own: Kalinka must refuse, and the playlist must still be there;
+   - create and delete a playlist;
    - play a Qobuz track, then a local track in the same queue;
    - confirm `reportStreamingStart` and `reportStreamingEnd` succeed in the log.
 4. Send a second handoff, from another phone or with `curl -X POST` and any body. It must be refused with HTTP 400, and the status must not change.
