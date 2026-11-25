@@ -668,7 +668,7 @@ class QobuzInputModule(InputModule):
         logger.info(f"Selecting Format '{config.format}', id = {self.format_id}")
         self.qobuz_client = qobuz_client
         self._playlist_index = playlist_index
-        self._autoplay = QobuzAutoplay(qobuz_client, metadata_from_track)
+        self._autoplay = QobuzAutoplay(qobuz_client)
         self.last_update = LastUpdate()
         self.user_playlist = []
 
