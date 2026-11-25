@@ -99,12 +99,15 @@ async def test_nothing_is_proposed_without_a_seed_or_a_linked_account():
     module = QobuzInputModule(QobuzConfig(), SimpleNamespace(require_account=unlinked))
     assert await module.continue_queue(ContinuationRequest(seeds=["111"])) == []
     assert ModuleCapability.CONTINUATION not in module.capabilities()
+    assert ModuleCapability.FAVORITES not in module.capabilities()
 
 
-def test_a_linked_account_offers_continuation():
+def test_a_linked_account_offers_continuation_and_favourites():
     module = QobuzInputModule(QobuzConfig(), SimpleNamespace(require_account=lambda: None))
 
-    assert module.capabilities() == frozenset({ModuleCapability.CATALOGS, ModuleCapability.CONTINUATION})
+    assert module.capabilities() == frozenset(
+        {ModuleCapability.CATALOGS, ModuleCapability.CONTINUATION, ModuleCapability.FAVORITES}
+    )
 
 
 @pytest.mark.parametrize("genres", [[], [4], [4, 7]])
