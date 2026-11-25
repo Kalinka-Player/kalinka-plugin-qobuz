@@ -676,15 +676,15 @@ class QobuzInputModule(InputModule):
         return "Qobuz"
 
     def capabilities(self) -> FrozenSet[ModuleCapability]:
-        """Catalogs always; continuation while an account is linked; AI search
-        only while the setting gave this module a playlist index that can
-        answer here and an account is linked."""
+        """Catalogs always; continuation and favourites while an account is
+        linked; AI search only while the setting gave this module a playlist
+        index that can answer here and an account is linked."""
         catalogs = frozenset({ModuleCapability.CATALOGS})
         try:
             self.qobuz_client.require_account()
         except AuthenticationError:
             return catalogs
-        linked = catalogs | {ModuleCapability.CONTINUATION}
+        linked = catalogs | {ModuleCapability.CONTINUATION, ModuleCapability.FAVORITES}
         if self._playlist_index is None or not self._playlist_index.can_answer():
             return linked
         return linked | {ModuleCapability.AI_SEARCH}
