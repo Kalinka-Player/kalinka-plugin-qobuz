@@ -2,6 +2,21 @@
 
 Curated, user-facing notes per release. Add a `## <version>` section before tagging — the release workflow puts the matching section into the GitHub Release body.
 
+## 5.7.0
+
+### Added
+- **Qobuz carries on Kalinka's Keep playing.** When the queue reaches its last track, Kalinka server 5.21 asks Qobuz for tracks like the latest Qobuz ones queued and appends them, and *Add similar tracks* in Kalinka app 0.29.0 asks the same way. A track you turn down is never used to pick what comes next.
+- **Mark and unmark Qobuz favourites with a heart.** Tracks, albums, artists and Qobuz's own playlists can be marked from Kalinka app 0.29.0 while an account is linked, and the change shows in the Qobuz app. Marking a playlist of your own is refused rather than passed to Qobuz.
+- **My Favourites in the Qobuz root,** with a catalog for each kind of favourite.
+
+### Fixed
+- **Every favourite has a row.** Lists stopped at 500 while hearts went on to 5000, so a later favourite had a heart and no row. Lists now go as deep as Qobuz pages them.
+- **Your own playlists are no longer counted as favourites.** Every playlist of the account was, though unmarking one would unsubscribe from it; favourite playlists are now the ones you subscribed to.
+- **A failed read no longer empties every heart.** When Qobuz could not be reached, the plugin answered as if nothing were marked; Kalinka now says Qobuz is unavailable.
+
+### Changed
+- Needs Kalinka server 5.21 or newer, which brings plugin SDK 3.24. The package will not install on an older server. From 5.21 the server, not the plugin, adds the tracks that carry the queue on, and it lists favourites only from sources that say they keep them, so with 5.6.0 Qobuz drops out of the app's Favourites. Upgrade Qobuz together with the server.
+
 ## 5.6.0
 
 ### Added
